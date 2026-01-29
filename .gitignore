@@ -1,0 +1,42 @@
+# Build directory
+build/
+
+.cache/
+# CMake files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+*.cmake
+!CMakeLists.txt
+!pico_sdk_import.cmake
+
+# Compiled Object files
+*.o
+*.obj
+*.elf
+*.bin
+*.hex
+*.uf2
+*.dis
+
+# Linker files
+*.ld
+
+# Ninja build files
+*.ninja
+compile_commands.json
+
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Generated files
+generated/
