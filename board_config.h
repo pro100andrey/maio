@@ -60,10 +60,16 @@ typedef enum tft_pins_e {
   PIN_TFT_CS = 17,
   PIN_TFT_DC = 21,
   PIN_TFT_RST = 20,
-  PIN_TFT_LED = 22 // Пин управления подсветкой
+  PIN_TFT_LED = 22 // Backlight control pin
 } tft_pins_t;
 
 #define TFT_SPI_INST spi0
 #define TFT_BAUDRATE (60 * 1000 * 1000)
+
+/**
+ * System configuration
+ */
+/** Encoder polling interval (milliseconds) */
+#define ENCODER_POLL_MS 1
 
 #endif // BOARD_CONFIG_H

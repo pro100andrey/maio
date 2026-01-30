@@ -3,14 +3,13 @@
  * @file encoder.c
  * @brief Rotary encoder driver implementation
  *
- * Implements interrupt-driven quadrature decoding with hardware debouncing
- * and thread-safe rotation counter management.
+ * Implements polling-based quadrature decoding with half-step algorithm
+ * optimized for mechanical encoders with detents.
  */
 
 #include "encoder.h"
 #include <hardware/gpio.h>
-#include <pico/critical_section.h>
-#include <stdio.h>
+#include <hardware/sync.h>
 
 /** Debounce time for button press in milliseconds */
 #define ENCODER_BUTTON_DEBOUNCE_MS 50
@@ -18,60 +17,9 @@
 /** Debounce time for rotation events in milliseconds */
 #define ENCODER_ROTATION_DEBOUNCE_MS 2
 
-/** Global pointer to active encoder instance (ISR access) */
-static encoder_t *global_enc = NULL;
-
-/** Critical section for thread-safe rotation counter access */
-static critical_section_t enc_crit_section;
-
-void encoder_irq_handler(uint gpio, uint32_t events) {
-  encoder_t *const enc = global_enc;
-  if (!enc)
-    return;
-
-  const uint32_t now = to_ms_since_boot(get_absolute_time());
-  const uint32_t gpio_state = sio_hw->gpio_in;
-
-  // Handle button press with configurable debounce
-  if (gpio == enc->pin_sw) {
-    if (now - enc->last_button_time > ENCODER_BUTTON_DEBOUNCE_MS) {
-      enc->btn_pressed = true;
-      enc->last_button_time = now;
-    }
-    return;
-  }
-
-  // Handle rotation with configurable debounce for responsive feel
-  if (gpio == enc->pin_a &&
-      (now - enc->last_rotation_time > ENCODER_ROTATION_DEBOUNCE_MS)) {
-    // Read both phase signals atomically from hardware register
-    bool a = (gpio_state >> enc->pin_a) & 1;
-    bool b = (gpio_state >> enc->pin_b) & 1;
-
-    critical_section_enter_blocking(&enc_crit_section);
-    // Standard quadrature logic:
-    // If A changed and A != B: clockwise rotation (+1)
-    // If A changed and A == B: counter-clockwise rotation (-1)
-    if (a != b) {
-      enc->rotation++;
-    } else {
-      enc->rotation--;
-    }
-    critical_section_exit(&enc_crit_section);
-
-    enc->last_rotation_time = now;
-  }
-}
-
 void encoder_init(encoder_t *enc, uint8_t gpio_a, uint8_t gpio_b,
                   uint8_t gpio_sw) {
-  // Link encoder instance to global pointer for ISR access
-  global_enc = enc;
-
-  // Initialize critical section for dual-core safety
-  critical_section_init(&enc_crit_section);
-
-  // Reset all state fields to safe initial values
+  // Reset all state fields
   enc->pin_a = gpio_a;
   enc->pin_b = gpio_b;
   enc->pin_sw = gpio_sw;
@@ -79,34 +27,75 @@ void encoder_init(encoder_t *enc, uint8_t gpio_a, uint8_t gpio_b,
   enc->btn_pressed = false;
   enc->last_button_time = 0;
   enc->last_rotation_time = 0;
+  enc->last_a_state = false;
+  enc->last_b_state = false;
 
-  // Configure encoder GPIOs as inputs with pull-ups
+  // Configure encoder GPIOs as inputs (no pull-up - module has its own)
   gpio_init(gpio_a);
   gpio_set_dir(gpio_a, GPIO_IN);
-  gpio_pull_up(gpio_a);
+  gpio_disable_pulls(gpio_a);
 
   gpio_init(gpio_b);
   gpio_set_dir(gpio_b, GPIO_IN);
-  gpio_pull_up(gpio_b);
+  gpio_disable_pulls(gpio_b);
 
+  // Configure button/switch pin with pull-up (button connects to GND)
   gpio_init(gpio_sw);
   gpio_set_dir(gpio_sw, GPIO_IN);
-  gpio_pull_up(gpio_sw);
+  gpio_pull_up(gpio_sw); // Enable pull-up for button
 
-  // Enable interrupts on phase A (both edges for full resolution)
-  gpio_set_irq_enabled_with_callback(enc->pin_a,
-                                     GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
-                                     true, &encoder_irq_handler);
+  // Initialize last states for edge detection
+  enc->last_a_state = gpio_get(gpio_a);
+  enc->last_b_state = gpio_get(gpio_b);
+  enc->last_sw_state = gpio_get(gpio_sw);
+}
 
-  // Enable interrupt on button (falling edge = button pressed to GND)
-  gpio_set_irq_enabled(enc->pin_sw, GPIO_IRQ_EDGE_FALL, true);
+void encoder_poll(encoder_t *enc) {
+  const uint32_t now = to_ms_since_boot(get_absolute_time());
+
+  // Read current GPIO states
+  bool a = gpio_get(enc->pin_a);
+  bool b = gpio_get(enc->pin_b);
+  bool sw = gpio_get(enc->pin_sw);
+
+  // Half-step algorithm for mechanical encoders with detents
+  // Detent position is typically A=1, B=1 (both HIGH)
+  // Detect rotation on falling edge of A (transition from detent)
+  if (enc->last_a_state && !a &&
+      (now - enc->last_rotation_time > ENCODER_ROTATION_DEBOUNCE_MS)) {
+    // When A falls from HIGH to LOW, check B to determine direction
+    // If B=HIGH: clockwise (A fell first)
+    // If B=LOW: counter-clockwise (B fell first, now A follows)
+    if (b) {
+      enc->rotation++;
+    } else {
+      enc->rotation--;
+    }
+    
+    enc->last_rotation_time = now;
+  }
+
+  // Update state tracking
+  enc->last_a_state = a;
+  enc->last_b_state = b;
+
+  // Detect button press on falling edge (HIGH to LOW)
+  // Button pulls GPIO to GND when pressed
+  if (!sw && enc->last_sw_state &&
+      (now - enc->last_button_time > ENCODER_BUTTON_DEBOUNCE_MS)) {
+    enc->btn_pressed = true;
+    enc->last_button_time = now;
+  }
+
+  enc->last_sw_state = sw;
 }
 
 int encoder_get_delta(encoder_t *enc) {
-  critical_section_enter_blocking(&enc_crit_section);
+  // Disable interrupts during read-modify-write to prevent race condition
+  uint32_t status = save_and_disable_interrupts();
   int delta = enc->rotation;
   enc->rotation = 0;
-  critical_section_exit(&enc_crit_section);
+  restore_interrupts(status);
 
   return delta;
 }

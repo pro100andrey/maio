@@ -33,11 +33,30 @@ project(maio C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
+# ---- Project Configuration ----
+# Edit values below to configure project features
+
+# Debug & Development Features
+set(DEBUG_VERBOSE OFF)
+set(ENABLE_ASSERTS ON)
+
+# Application Features
+set(ENABLE_WIFI OFF)  # WiFi disabled
+set(ENABLE_ENCODER ON)
+set(ENABLE_LED ON)
+
+# Performance Tuning
+set(EVENT_QUEUE_SIZE 10)
+set(SYSTEM_TICK_MS 10)
+
 # Add executable. Default name is the project name, version 0.1
 
 add_executable(maio 
     src/main.c
-    utils/profiler/profiler.c
+    src/core/event_manager.c
+    src/core/strategy.c
+    src/strategies/idle_strategy.c
+    src/managers/encoder_manager.c
     drivers/encoder/encoder.c
 )
 
@@ -51,20 +70,29 @@ pico_set_binary_type(maio no_flash)
 pico_enable_stdio_uart(maio 1)
 pico_enable_stdio_usb(maio 0)
 
+# Apply compile definitions
+target_compile_definitions(maio PRIVATE
+    EVENT_QUEUE_SIZE=${EVENT_QUEUE_SIZE}
+    SYSTEM_TICK_MS=${SYSTEM_TICK_MS}
+    $<$<BOOL:${DEBUG_VERBOSE}>:DEBUG_VERBOSE>
+    $<$<BOOL:${ENABLE_ASSERTS}>:ENABLE_ASSERTS>
+    $<$<BOOL:${ENABLE_WIFI}>:ENABLE_WIFI>
+    $<$<BOOL:${ENABLE_ENCODER}>:ENABLE_ENCODER>
+    $<$<BOOL:${ENABLE_LED}>:ENABLE_LED>
+)
+
 # Add the standard library to the build
 target_link_libraries(maio
         pico_stdlib
         hardware_gpio
         hardware_sync
-        hardware_clocks
-        pico_cyw43_arch_lwip_threadsafe_background)
+        hardware_clocks)
 
 # Add the standard include files to the build
 target_include_directories(maio PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
         ${CMAKE_CURRENT_LIST_DIR}/src/shared
         ${CMAKE_CURRENT_LIST_DIR}/drivers
-        ${CMAKE_CURRENT_LIST_DIR}/utils
 )
 
 pico_add_extra_outputs(maio)
