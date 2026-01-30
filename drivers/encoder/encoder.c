@@ -63,7 +63,6 @@ void encoder_irq_handler(uint gpio, uint32_t events) {
   }
 }
 
-
 void encoder_init(encoder_t *enc, uint8_t gpio_a, uint8_t gpio_b,
                   uint8_t gpio_sw) {
   // Link encoder instance to global pointer for ISR access
