@@ -23,7 +23,7 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
-set(PICO_BOARD pico2 CACHE STRING "Board type")
+set(PICO_BOARD pico2_w CACHE STRING "Board type")
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
@@ -35,7 +35,11 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(maio main.c )
+add_executable(maio 
+    src/main.c
+    utils/profiler/profiler.c
+    drivers/encoder/encoder.c
+)
 
 pico_set_program_name(maio "maio")
 pico_set_program_version(maio "0.1")
@@ -49,11 +53,18 @@ pico_enable_stdio_usb(maio 0)
 
 # Add the standard library to the build
 target_link_libraries(maio
-        pico_stdlib)
+        pico_stdlib
+        hardware_gpio
+        hardware_sync
+        hardware_clocks
+        pico_cyw43_arch_lwip_threadsafe_background)
 
 # Add the standard include files to the build
 target_include_directories(maio PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
+        ${CMAKE_CURRENT_LIST_DIR}/src/shared
+        ${CMAKE_CURRENT_LIST_DIR}/drivers
+        ${CMAKE_CURRENT_LIST_DIR}/utils
 )
 
 pico_add_extra_outputs(maio)
