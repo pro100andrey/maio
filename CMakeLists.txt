@@ -33,6 +33,21 @@ project(maio C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
+# ---- LVGL (submodule) ----
+# Disable Helium before including LVGL
+set(LV_USE_DRAW_SW_ASM_HELIUM OFF CACHE BOOL "" FORCE)
+
+set(LV_CONF_MEM_CUSTOM 1 CACHE INTERNAL "")
+set(CONFIG_LV_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
+set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(CONFIG_LV_USE_THORVG_INTERNAL OFF CACHE BOOL "" FORCE)
+set(LV_CONF_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lv_conf.h" CACHE STRING "" FORCE)
+
+add_subdirectory(lvgl)
+
+# Configure LVGL to use our lv_conf.h
+target_include_directories(lvgl PUBLIC ${CMAKE_CURRENT_LIST_DIR})
+
 # ---- Project Configuration ----
 # Edit values below to configure project features
 
@@ -44,6 +59,7 @@ set(ENABLE_ASSERTS ON)
 set(ENABLE_WIFI OFF)  # WiFi disabled
 set(ENABLE_ENCODER ON)
 set(ENABLE_LED ON)
+set(ENABLE_DISPLAY ON)  # Display enabled
 
 # Performance Tuning
 set(EVENT_QUEUE_SIZE 10)
@@ -56,8 +72,11 @@ add_executable(maio
     src/core/event_manager.c
     src/core/strategy.c
     src/strategies/idle_strategy.c
+    src/strategies/init_strategy.c
     src/managers/encoder_manager.c
+    src/managers/display_manager.c
     drivers/encoder/encoder.c
+    drivers/display/ili9341.c
 )
 
 pico_set_program_name(maio "maio")
@@ -79,6 +98,8 @@ target_compile_definitions(maio PRIVATE
     $<$<BOOL:${ENABLE_WIFI}>:ENABLE_WIFI>
     $<$<BOOL:${ENABLE_ENCODER}>:ENABLE_ENCODER>
     $<$<BOOL:${ENABLE_LED}>:ENABLE_LED>
+    $<$<BOOL:${ENABLE_DISPLAY}>:ENABLE_DISPLAY>
+    LV_CONF_INCLUDE_SIMPLE
 )
 
 # Add the standard library to the build
@@ -86,7 +107,12 @@ target_link_libraries(maio
         pico_stdlib
         hardware_gpio
         hardware_sync
-        hardware_clocks)
+        hardware_clocks
+        hardware_spi
+        hardware_dma
+        hardware_pwm
+        lvgl
+)
 
 # Add the standard include files to the build
 target_include_directories(maio PRIVATE

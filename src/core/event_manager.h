@@ -24,6 +24,14 @@ bool event_manager_post(const event_t *event);
 void event_manager_wait(event_t *event);
 
 /**
+ * @brief Wait for event with timeout (for LVGL integration)
+ * @param event Pointer to receive event
+ * @param timeout_ms Maximum time to wait in milliseconds
+ * @return true if event received, false if timeout expired
+ */
+bool event_manager_wait_timeout(event_t *event, uint32_t timeout_ms);
+
+/**
  * @brief Try to get event without blocking
  * @param event Pointer to receive event
  * @return true if event received, false if queue empty

@@ -1,0 +1,84 @@
+Техническое задание: Интеграция LVGL + DMA в архитектуру Maio (RP2350)
+1. Цель
+Реализовать графическую подсистему на базе LVGL 9.x, интегрированную в событийную модель Maio. Обеспечить неблокирующую работу через DMA и переключение между режимами (стратегиями), где каждая стратегия владеет своим экраном LVGL.
+
+2. Архитектурные принципы
+No Blocking: Запрещено использование sleep_ms в основном потоке и драйверах.
+
+Dependency Injection: Драйверы получают настройки (пины, SPI) через структуры при инициализации.
+
+Event-Driven: Все изменения UI инициируются событиями из event_manager.
+
+Power Efficiency: Использование __wfi() в цикле ожидания событий с учетом таймаутов LVGL.
+
+3. Иерархия файлов и ответственности
+A. Driver Layer (drivers/display/ili9341.*)
+
+Функции: Низкоуровневые команды SPI, настройка окна.
+
+Async Init: Реализовать bool ili9341_init_tick(ili9341_t *dev). Это конечный автомат, который проходит этапы (Reset -> Software Resert -> Wakeup -> Config) без sleep.
+
+DMA: Функция ili9341_send_pixels_dma(...) для фоновой передачи буфера.
+
+B. Manager Layer (src/managers/display_manager.*)
+
+LVGL Config: Владеет статическими буферами отрисовки (рекомендуется 2 буфера по 10-20 строк).
+
+Flush Callback: Мост между LVGL и драйвером. Настраивает окно и запускает DMA.
+
+DMA ISR: Обработчик прерывания DMA. По завершении передачи вызывает lv_display_flush_ready().
+
+C. Core Update (src/core/event_manager.*)
+
+Обновить event_manager_wait до bool event_manager_wait_timeout(event_t *event, uint32_t timeout_ms).
+
+Использовать __wfi() внутри, чтобы просыпаться по прерыванию или по истечении времени таймаута LVGL.
+
+D. Strategy Layer (src/strategies/)
+
+Каждая стратегия (режим) должна иметь указатель lv_obj_t *screen.
+
+on_enter: Создает экран (lv_obj_create(NULL)), наполняет его виджетами текущего режима и вызывает lv_screen_load(screen).
+
+on_exit: Удаляет экран и все вложенные объекты для освобождения RAM.
+
+on_event: Обновляет виджеты при получении данных (например, EV_ENCODER_ROTATE).
+
+4. Логика работы основного цикла (main.c)
+Агент должен реализовать цикл следующим образом:
+
+Init State: Система стартует с init_strategy.
+
+Tick: init_strategy ловит EV_TIMER_TICK и вызывает ili9341_init_tick.
+
+Switch: После готовности железа init_strategy инициализирует LVGL и переключается на idle_strategy.
+
+Loop:
+
+C
+while (true) {
+    uint32_t next_ms = lv_timer_handler(); // Обработка UI
+    event_t ev;
+    if (event_manager_wait_timeout(&ev, next_ms)) {
+        strategy_dispatch_event(&ev); // Обработка логики
+    }
+}
+5. Технические параметры (Board Config)
+SPI Speed: 62.5 MHz (на RP2350).
+
+DMA Channel: Занять свободный канал через dma_claim_unused_channel.
+
+Color Depth: RGB565 (16-bit).
+
+System Tick: 10 ms для lv_tick_inc.
+
+6. Инструкции для реализации
+Refactor: Начни с переписывания драйвера ili9341 в неблокирующий вид с поддержкой DMA.
+
+Connect: Настрой display_manager как «клей» между LVGL и драйвером.
+
+Strategies: Реализуй init_strategy как контроллер процесса загрузки и idle_strategy как пример первого экрана с использованием виджетов (например, lv_label для отображения позиции энкодера).
+
+Verify: Убедись, что при переключении стратегий старые экраны LVGL корректно удаляются из памяти.
+
+Ожидаемый результат: Плавный графический интерфейс с анимациями переходов между режимами, работающий в фоновом режиме относительно основной логики измерений и обработки энкодера.

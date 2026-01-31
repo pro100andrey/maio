@@ -4,6 +4,8 @@
 #include "managers/encoder_manager.h"
 #include "shared/events.h"
 #include "strategies/idle_strategy.h"
+#include "strategies/init_strategy.h"
+#include <lvgl.h>
 #include <pico/stdio.h>
 #include <pico/time.h>
 #include <stdio.h>
@@ -52,8 +54,8 @@ int main(void) {
   printf("[Main] GPIO state: A=%d, B=%d, SW=%d (expected: 1,1,1)\n",
          gpio_get(PIN_ENC_A), gpio_get(PIN_ENC_B), gpio_get(PIN_ENC_SW));
 
-  // Set initial strategy
-  strategy_switch(&idle_strategy);
+  // Set initial strategy to init (will handle display initialization)
+  strategy_switch(&init_strategy);
 
   // Setup periodic timer (1ms interval)
   struct repeating_timer timer;
@@ -63,11 +65,14 @@ int main(void) {
 
   event_t event;
   while (true) {
-    // Wait for event (blocking, CPU sleeps here)
-    event_manager_wait(&event);
+    // Handle LVGL timers and get next timeout
+    uint32_t next_ms = lv_timer_handler();
 
-    // Dispatch event to current strategy
-    strategy_dispatch_event(&event);
+    // Wait for event with LVGL timeout (uses __wfi() for power efficiency)
+    if (event_manager_wait_timeout(&event, next_ms)) {
+      // Dispatch event to current strategy
+      strategy_dispatch_event(&event);
+    }
   }
 
   return 0;

@@ -17,6 +17,10 @@ typedef enum {
   EV_TIMER_TICK,
   /** Data ready from sensor/ADC */
   EV_DATA_READY,
+  /** Display initialization tick for async init */
+  EV_DISPLAY_INIT_TICK,
+  /** Display hardware ready */
+  EV_DISPLAY_READY,
 } event_type_t;
 
 /**
