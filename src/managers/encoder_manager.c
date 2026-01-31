@@ -23,7 +23,8 @@ void encoder_manager_poll(void) {
   // Check for button press
   if (encoder.btn_pressed) {
     encoder.btn_pressed = false; // Clear flag
-    event_t ev = {.type = EV_ENCODER_BUTTON, .payload = 0};
+    event_t ev = {.type = EV_ENCODER_BUTTON,
+                  .payload = 1}; // payload=1 for pressed
     event_manager_post(&ev);
   }
 }

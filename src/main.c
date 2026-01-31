@@ -3,9 +3,7 @@
 #include "core/strategy.h"
 #include "managers/encoder_manager.h"
 #include "shared/events.h"
-#include "strategies/idle_strategy.h"
 #include "strategies/init_strategy.h"
-#include <lvgl.h>
 #include <pico/stdio.h>
 #include <pico/time.h>
 #include <stdio.h>
@@ -65,11 +63,8 @@ int main(void) {
 
   event_t event;
   while (true) {
-    // Handle LVGL timers and get next timeout
-    uint32_t next_ms = lv_timer_handler();
-
-    // Wait for event with LVGL timeout (uses __wfi() for power efficiency)
-    if (event_manager_wait_timeout(&event, next_ms)) {
+    // Wait for event (uses __wfi() for power efficiency)
+    if (event_manager_wait_timeout(&event, 100)) {
       // Dispatch event to current strategy
       strategy_dispatch_event(&event);
     }

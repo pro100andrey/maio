@@ -5,10 +5,12 @@
 
 #include "ili9341.h"
 #include <hardware/gpio.h>
+#include <hardware/irq.h>
 #include <hardware/pwm.h>
 #include <hardware/spi.h>
 #include <pico/time.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 // ILI9341 Commands
@@ -79,6 +81,11 @@ void ili9341_init(ili9341_t *dev, const ili9341_config_t *config) {
   dev->dma_channel = -1;
   dev->dma_busy = false;
 
+  // Set default orientation (portrait)
+  dev->orientation = ILI9341_PORTRAIT;
+  dev->width = ILI9341_NATIVE_WIDTH;
+  dev->height = ILI9341_NATIVE_HEIGHT;
+
   // Initialize GPIO
   gpio_init(dev->config.pin_cs);
   gpio_set_dir(dev->config.pin_cs, GPIO_OUT);
@@ -91,10 +98,15 @@ void ili9341_init(ili9341_t *dev, const ili9341_config_t *config) {
   gpio_set_dir(dev->config.pin_rst, GPIO_OUT);
   gpio_put(dev->config.pin_rst, 1);
 
-  // Initialize SPI
-  spi_init(dev->config.spi, dev->config.spi_baudrate);
+  // Initialize SPI with explicit 8-bit format
+  uint32_t actual_baudrate =
+      spi_init(dev->config.spi, dev->config.spi_baudrate);
+  spi_set_format(dev->config.spi, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
   gpio_set_function(dev->config.pin_sck, GPIO_FUNC_SPI);
   gpio_set_function(dev->config.pin_mosi, GPIO_FUNC_SPI);
+
+  printf("[ILI9341] SPI configured: requested=%u Hz, actual=%u Hz\n",
+         dev->config.spi_baudrate, actual_baudrate);
 
   // Initialize backlight (PWM)
   if (dev->config.pin_led != 255) {
@@ -258,5 +270,141 @@ void ili9341_set_backlight(ili9341_t *dev, uint8_t brightness) {
     uint32_t slice = pwm_gpio_to_slice_num(dev->config.pin_led);
     pwm_set_chan_level(slice, pwm_gpio_to_channel(dev->config.pin_led),
                        brightness);
+  }
+}
+
+// Orientation control functions
+void ili9341_set_orientation(ili9341_t *dev,
+                             ili9341_orientation_t orientation) {
+  dev->orientation = orientation;
+
+  uint8_t madctl_value;
+  switch (orientation) {
+  case ILI9341_PORTRAIT:
+    madctl_value = 0x48; // MY=0, MX=1, MV=0, BGR=1
+    dev->width = ILI9341_NATIVE_WIDTH;
+    dev->height = ILI9341_NATIVE_HEIGHT;
+    break;
+  case ILI9341_LANDSCAPE:
+    madctl_value = 0x28; // MY=0, MX=0, MV=1, BGR=1
+    dev->width = ILI9341_NATIVE_HEIGHT;
+    dev->height = ILI9341_NATIVE_WIDTH;
+    break;
+  case ILI9341_PORTRAIT_INV:
+    madctl_value = 0x88; // MY=1, MX=0, MV=0, BGR=1
+    dev->width = ILI9341_NATIVE_WIDTH;
+    dev->height = ILI9341_NATIVE_HEIGHT;
+    break;
+  case ILI9341_LANDSCAPE_INV:
+    madctl_value = 0xE8; // MY=1, MX=1, MV=1, BGR=1
+    dev->width = ILI9341_NATIVE_HEIGHT;
+    dev->height = ILI9341_NATIVE_WIDTH;
+    break;
+  default:
+    madctl_value = 0x48;
+    dev->width = ILI9341_NATIVE_WIDTH;
+    dev->height = ILI9341_NATIVE_HEIGHT;
+    break;
+  }
+
+  write_cmd(dev, 0x36); // MADCTL
+  write_data(dev, &madctl_value, 1);
+
+  printf("[ILI9341] Orientation set to %d (%ux%u, MADCTL=0x%02X)\n",
+         orientation, dev->width, dev->height, madctl_value);
+}
+
+ili9341_orientation_t ili9341_get_orientation(ili9341_t *dev) {
+  return dev->orientation;
+}
+
+uint16_t ili9341_get_width(ili9341_t *dev) { return dev->width; }
+
+uint16_t ili9341_get_height(ili9341_t *dev) { return dev->height; }
+
+void ili9341_fill_screen(ili9341_t *dev, uint16_t color) {
+  // Set window to full screen (using current orientation)
+  ili9341_set_window(dev, 0, 0, dev->width - 1, dev->height - 1);
+
+// Prepare buffer with solid color (1024 pixels chunk)
+#define CHUNK_SIZE 1024
+  uint16_t buffer[CHUNK_SIZE];
+
+  // Swap bytes for ILI9341 (expects big-endian)
+  uint16_t swapped_color = (color >> 8) | (color << 8);
+
+  for (int i = 0; i < CHUNK_SIZE; i++) {
+    buffer[i] = swapped_color;
+  }
+
+  // Calculate total pixels (based on current orientation)
+  uint32_t total_pixels = dev->width * dev->height;
+  uint32_t remaining = total_pixels;
+
+  printf("[ILI9341] Filling %u pixels (color=0x%04X, swapped=0x%04X)\n",
+         total_pixels, color, swapped_color);
+
+  CS_LOW();
+  DC_DATA();
+
+  // Send data in chunks via blocking SPI (8-bit mode, 2 bytes per pixel)
+  uint32_t chunks_sent = 0;
+  while (remaining > 0) {
+    uint32_t chunk = (remaining > CHUNK_SIZE) ? CHUNK_SIZE : remaining;
+    size_t bytes_to_send = chunk * 2; // 2 bytes per pixel
+    spi_write_blocking(dev->config.spi, (const uint8_t *)buffer, bytes_to_send);
+    remaining -= chunk;
+    chunks_sent++;
+  }
+
+  CS_HIGH();
+  printf("[ILI9341] Fill complete: %u chunks sent\n", chunks_sent);
+}
+
+void ili9341_draw_pixel(ili9341_t *dev, uint16_t x, uint16_t y,
+                        uint16_t color) {
+  if (x >= dev->width || y >= dev->height) {
+    return; // Out of bounds
+  }
+
+  // Set window to single pixel
+  ili9341_set_window(dev, x, y, x, y);
+
+  // Swap bytes for ILI9341
+  uint16_t swapped_color = (color >> 8) | (color << 8);
+
+  CS_LOW();
+  DC_DATA();
+  spi_write_blocking(dev->config.spi, (const uint8_t *)&swapped_color, 2);
+  CS_HIGH();
+}
+
+void ili9341_draw_line(ili9341_t *dev, uint16_t x0, uint16_t y0, uint16_t x1,
+                       uint16_t y1, uint16_t color) {
+  // Bresenham's line algorithm
+  printf("[ILI9341] Drawing line from (%d,%d) to (%d,%d)\n", x0, y0, x1, y1);
+
+  int16_t dx = abs(x1 - x0);
+  int16_t dy = abs(y1 - y0);
+  int16_t sx = (x0 < x1) ? 1 : -1;
+  int16_t sy = (y0 < y1) ? 1 : -1;
+  int16_t err = dx - dy;
+
+  while (true) {
+    ili9341_draw_pixel(dev, x0, y0, color);
+
+    if (x0 == x1 && y0 == y1) {
+      break;
+    }
+
+    int16_t e2 = 2 * err;
+    if (e2 > -dy) {
+      err -= dy;
+      x0 += sx;
+    }
+    if (e2 < dx) {
+      err += dx;
+      y0 += sy;
+    }
   }
 }

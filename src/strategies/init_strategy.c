@@ -51,20 +51,29 @@ static void init_on_event(const event_t *event) {
 
     // Continue async init
     if (ili9341_init_tick(&ili_device)) {
-      // Hardware ready!
-      printf("[Init] Hardware initialized, setting up LVGL...\n");
+      printf("[Init] Hardware initialized\n");
 
-      // Initialize LVGL
+      // Store device reference in manager
       display_manager_init(&ili_device);
 
       // Turn on backlight
       ili9341_set_backlight(&ili_device, 255);
+      printf("[Init] Backlight ON\n");
 
-      // Post ready event
-      event_t ev = {.type = EV_DISPLAY_READY, .payload = 0};
-      event_manager_post(&ev);
+      // Set default orientation to landscape
+      ili9341_set_orientation(&ili_device, ILI9341_LANDSCAPE);
 
-      // Switch to idle strategy
+      // Test display: fill screen with red (RGB565: 0xF800)
+      printf("[Init] Testing display - filling screen with RED...\n");
+      ili9341_fill_screen(&ili_device, 0xF800);
+
+      // Draw green diagonal line from (0,0) to bottom-right
+      uint16_t w = ili9341_get_width(&ili_device);
+      uint16_t h = ili9341_get_height(&ili_device);
+      printf("[Init] Drawing GREEN diagonal line...\n");
+      ili9341_draw_line(&ili_device, 0, 0, w - 1, h - 1, 0x07E0);
+
+      printf("[Init] Display test complete!\n");
       printf("[Init] Switching to Idle mode...\n");
       strategy_switch(&idle_strategy);
     }
