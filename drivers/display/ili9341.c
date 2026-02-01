@@ -43,6 +43,11 @@
 #define DC_CMD() gpio_put(dev->config.pin_dc, 0)
 #define DC_DATA() gpio_put(dev->config.pin_dc, 1)
 
+// Maximum pixels per DMA burst (fits in static buffer)
+#define DMA_CHUNK_PIXELS 512
+// Bytes per pixel (RGB565)
+#define BYTES_PER_PIXEL 2
+
 /**
  * @brief Write command byte
  */
@@ -120,11 +125,41 @@ static void __isr ili9341_dma_irq_handler(void) {
       // Clear interrupt flag
       dma_hw->ints0 = 1u << g_dma_device->dma_channel;
 
-      // End transaction (direct GPIO write)
-      gpio_put(g_dma_device->config.pin_cs, 1);
+      if (g_dma_device->dma_remaining > 0) {
+        // Schedule next chunk in-chain without releasing CS
+        uint32_t chunk_bytes =
+            (g_dma_device->dma_remaining > DMA_CHUNK_PIXELS * BYTES_PER_PIXEL)
+                ? DMA_CHUNK_PIXELS * BYTES_PER_PIXEL
+                : g_dma_device->dma_remaining;
+        g_dma_device->dma_remaining -= chunk_bytes;
 
-      // Mark DMA as idle
-      g_dma_device->dma_busy = false;
+
+        // Reconfigure channel for the next chunk (keeps CS low)
+        dma_channel_config c =
+            dma_channel_get_default_config(g_dma_device->dma_channel);
+        channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+        channel_config_set_dreq(&c,
+                                spi_get_dreq(g_dma_device->config.spi, true));
+        channel_config_set_read_increment(&c, g_dma_device->dma_src_inc);
+        channel_config_set_write_increment(&c, false);
+
+        dma_channel_configure(g_dma_device->dma_channel, &c,
+                              &spi_get_hw(g_dma_device->config.spi)->dr,
+                              g_dma_device->dma_src, chunk_bytes, true);
+      } else {
+        // Wait for SPI to finish shifting remaining bytes
+        while (spi_is_busy(g_dma_device->config.spi)) {
+          tight_loop_contents();
+        }
+
+        // End transaction (direct GPIO write)
+        gpio_put(g_dma_device->config.pin_cs, 1);
+
+        // Mark DMA as idle
+        g_dma_device->dma_busy = false;
+
+        printf("[ILI9341][DMA] done\n");
+      }
     }
   }
 }
@@ -135,6 +170,9 @@ void ili9341_init(ili9341_t *dev, const ili9341_config_t *config) {
   dev->init_state = ILI9341_STATE_IDLE;
   dev->dma_channel = -1;
   dev->dma_busy = false;
+  dev->dma_src = NULL;
+  dev->dma_remaining = 0;
+  dev->dma_src_inc = false;
 
   // Set default orientation (portrait)
   dev->orientation = ILI9341_PORTRAIT;
@@ -291,11 +329,15 @@ bool ili9341_send_pixels_dma(ili9341_t *dev, const uint16_t *buffer,
     return false;
   }
 
+  // Prepare DMA bookkeeping (bytes)
+  dev->dma_src = (const uint8_t *)buffer;
+  dev->dma_src_inc = true;
+  dev->dma_remaining = 0; // single burst
   dev->dma_busy = true;
 
   // Configure DMA transfer
   dma_channel_config c = dma_channel_get_default_config(dev->dma_channel);
-  channel_config_set_transfer_data_size(&c, DMA_SIZE_16);
+  channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
   channel_config_set_dreq(&c, spi_get_dreq(dev->config.spi, true));
   channel_config_set_read_increment(&c, true);
   channel_config_set_write_increment(&c, false);
@@ -305,8 +347,8 @@ bool ili9341_send_pixels_dma(ili9341_t *dev, const uint16_t *buffer,
 
   dma_channel_configure(dev->dma_channel, &c,
                         &spi_get_hw(dev->config.spi)->dr, // dest
-                        buffer,                           // src
-                        length,                           // count (pixels)
+                        buffer,                           // src (bytes)
+                        length * BYTES_PER_PIXEL,         // count (bytes)
                         true                              // start immediately
   );
 
@@ -417,8 +459,8 @@ void ili9341_fill_rect(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
   CS_HIGH();
 }
 
-// DMA buffer for async operations (static to keep in RAM)
-static uint16_t g_dma_fill_buffer[512];
+// DMA buffer for async operations (bytes, big-endian color pairs)
+static uint8_t g_dma_fill_buffer[DMA_CHUNK_PIXELS * BYTES_PER_PIXEL];
 static bool g_buffer_initialized = false;
 
 void ili9341_fill_screen(ili9341_t *dev, uint16_t color) {
@@ -457,47 +499,60 @@ bool ili9341_fill_rect_async(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
   if (pixel_count == 0)
     return false;
 
+  printf("[ILI9341][DMA] start fill_async x=%u y=%u w=%u h=%u pixels=%lu\n", x,
+         y, w, h, (unsigned long)pixel_count);
+
   // Initialize DMA buffer once
   if (!g_buffer_initialized) {
     uint16_t swapped = (color >> 8) | (color << 8);
-    for (int i = 0; i < 512; i++) {
-      g_dma_fill_buffer[i] = swapped;
+    for (int i = 0; i < DMA_CHUNK_PIXELS; i++) {
+      g_dma_fill_buffer[i * 2] = (uint8_t)(swapped & 0xFF);   // low byte first
+      g_dma_fill_buffer[i * 2 + 1] = (uint8_t)(swapped >> 8); // high byte
     }
     g_buffer_initialized = true;
   }
 
   // Update buffer if color changed
   uint16_t swapped_color = (color >> 8) | (color << 8);
-  if (g_dma_fill_buffer[0] != swapped_color) {
-    for (int i = 0; i < 512; i++) {
-      g_dma_fill_buffer[i] = swapped_color;
+  if (g_dma_fill_buffer[0] != (uint8_t)(swapped_color & 0xFF) ||
+      g_dma_fill_buffer[1] != (uint8_t)(swapped_color >> 8)) {
+    for (int i = 0; i < DMA_CHUNK_PIXELS; i++) {
+      g_dma_fill_buffer[i * 2] = (uint8_t)(swapped_color & 0xFF);
+      g_dma_fill_buffer[i * 2 + 1] = (uint8_t)(swapped_color >> 8);
     }
   }
 
   // Set window
   ili9341_set_window(dev, x, y, x + w - 1, y + h - 1);
 
-  // Start DMA transfer (will send in chunks automatically via IRQ)
+  // Start DMA transfer (multi-chunk via IRQ)
+  uint32_t chunk_size =
+      (pixel_count > DMA_CHUNK_PIXELS) ? DMA_CHUNK_PIXELS : pixel_count;
+  uint32_t chunk_bytes = chunk_size * BYTES_PER_PIXEL;
+  dev->dma_remaining = (pixel_count * BYTES_PER_PIXEL) - chunk_bytes;
+  dev->dma_src = g_dma_fill_buffer;
+  dev->dma_src_inc = true; // byte-wise increment
   dev->dma_busy = true;
 
-  // For now, send first chunk - full implementation would need multi-chunk DMA
-  uint32_t chunk_size = (pixel_count > 512) ? 512 : pixel_count;
+  printf("[ILI9341][DMA] chunk0=%lu remain=%lu color=0x%04X\n",
+         (unsigned long)chunk_size, (unsigned long)dev->dma_remaining,
+         swapped_color);
 
   // Configure and start DMA
   dma_channel_config c = dma_channel_get_default_config(dev->dma_channel);
-  channel_config_set_transfer_data_size(&c, DMA_SIZE_16);
+  channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
   channel_config_set_dreq(&c, spi_get_dreq(dev->config.spi, true));
-  channel_config_set_read_increment(&c, false); // Same color repeated
+  channel_config_set_read_increment(&c, true); // increment bytes
   channel_config_set_write_increment(&c, false);
 
   CS_LOW();
   DC_DATA();
 
-  dma_channel_configure(dev->dma_channel, &c, &spi_get_hw(dev->config.spi)->dr,
-                        g_dma_fill_buffer, chunk_size, true);
+  // Clear any stale interrupt flag before starting
+  dma_hw->ints0 = 1u << dev->dma_channel;
 
-  // For large fills, this is simplified - full version would chain DMA
-  // transfers
+  dma_channel_configure(dev->dma_channel, &c, &spi_get_hw(dev->config.spi)->dr,
+                        g_dma_fill_buffer, chunk_bytes, true);
   return true;
 }
 
