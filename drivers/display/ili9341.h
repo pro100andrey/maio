@@ -99,17 +99,6 @@ void ili9341_init(ili9341_t *dev, const ili9341_config_t *config);
 bool ili9341_init_tick(ili9341_t *dev);
 
 /**
- * @brief Set drawing window (for partial screen updates)
- * @param dev Device context
- * @param x0 Start X coordinate
- * @param y0 Start Y coordinate
- * @param x1 End X coordinate
- * @param y1 End Y coordinate
- */
-void ili9341_set_window(ili9341_t *dev, uint16_t x0, uint16_t y0, uint16_t x1,
-                        uint16_t y1);
-
-/**
  * @brief Send pixel data via DMA (non-blocking)
  * @param dev Device context
  * @param buffer Pixel buffer (RGB565 format)
@@ -174,6 +163,45 @@ uint16_t ili9341_get_height(ili9341_t *dev);
  * @param color RGB565 color value
  */
 void ili9341_fill_screen(ili9341_t *dev, uint16_t color);
+
+/**
+ * @brief Fill rectangular area with solid color (optimized)
+ * @param dev Device context
+ * @param x X coordinate
+ * @param y Y coordinate
+ * @param w Width in pixels
+ * @param h Height in pixels
+ * @param color RGB565 color value
+ */
+void ili9341_fill_rect(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
+                       uint16_t h, uint16_t color);
+
+/**
+ * @brief Fill rectangular area using DMA (non-blocking)
+ * @param dev Device context
+ * @param x X coordinate
+ * @param y Y coordinate
+ * @param w Width in pixels
+ * @param h Height in pixels
+ * @param color RGB565 color value
+ * @return true if DMA started, false if DMA busy
+ *
+ * @note CPU is free during transfer. Check ili9341_dma_is_idle() before next
+ * operation.
+ */
+bool ili9341_fill_rect_async(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
+                             uint16_t h, uint16_t color);
+
+/**
+ * @brief Fill entire screen using DMA (non-blocking)
+ * @param dev Device context
+ * @param color RGB565 color value
+ * @return true if DMA started, false if DMA busy
+ *
+ * @note CPU is free during transfer. Perfect for background updates while doing
+ * ADC/sensors.
+ */
+bool ili9341_fill_screen_async(ili9341_t *dev, uint16_t color);
 
 /**
  * @brief Draw a single pixel

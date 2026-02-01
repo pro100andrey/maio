@@ -9,15 +9,39 @@ static int position = 0;
 static uint8_t color_index = 0;
 static const uint16_t colors[] = {0xF800, 0x07E0, 0x001F}; // Red, Green, Blue
 static const char *color_names[] = {"RED", "GREEN", "BLUE"};
+static bool use_async_mode = false; // Toggle between sync/async rendering
 
 static void draw_screen(void) {
   ili9341_t *dev = display_manager_get_device();
   if (!dev)
     return;
 
-  // Fill with current color
-  printf("[Idle] Drawing %s screen\n", color_names[color_index]);
-  ili9341_fill_screen(dev, colors[color_index]);
+  if (use_async_mode) {
+
+    printf("[Idle] Drawing %s screen (ASYNC DMA mode)\n",
+           color_names[color_index]);
+
+    if (ili9341_fill_screen_async(dev, colors[color_index])) {
+      printf("[CPU] DMA started! CPU теперь свободен для других задач\n");
+
+      volatile uint32_t sum = 0;
+      for (int i = 0; i < 5000; i++) {
+        sum += i * i;
+      }
+
+      while (!ili9341_dma_is_idle(dev)) {
+        tight_loop_contents();
+      }
+      printf("[CPU] Calculations done: sum=%u\n", sum);
+    } else {
+      printf("[ERROR] DMA busy, falling back to sync\n");
+      ili9341_fill_screen(dev, colors[color_index]);
+    }
+  } else {
+    // Синхронный режим (блокирующий)
+    printf("[Idle] Drawing %s screen (SYNC mode)\n", color_names[color_index]);
+    ili9341_fill_screen(dev, colors[color_index]);
+  }
 
   // Always draw green diagonal line from (0,0) to bottom-right
   uint16_t w = ili9341_get_width(dev);
@@ -49,18 +73,18 @@ static void idle_on_event(const event_t *event) {
     } else {
       color_index = (color_index + 2) % 3; // +2 is same as -1 in mod 3
     }
+
     draw_screen();
     break;
 
   case EV_ENCODER_BUTTON:
     printf("[Idle] Button event: payload=%d\n", event->payload);
 
-    // Rotate orientation on button press (payload == 1 means pressed)
     if (dev && event->payload == 1) {
-      ili9341_orientation_t current = ili9341_get_orientation(dev);
-      ili9341_orientation_t next = (current + 1) % 4;
-      printf("[Idle] Switching orientation %d -> %d\n", current, next);
-      ili9341_set_orientation(dev, next);
+      // Single press = toggle async mode
+      use_async_mode = !use_async_mode;
+      printf("[Idle] %s DMA async mode\n",
+             use_async_mode ? "ENABLED" : "DISABLED");
       draw_screen();
     }
     break;
