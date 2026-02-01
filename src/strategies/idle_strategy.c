@@ -84,10 +84,10 @@ static void scene_backlight_ramp(ili9341_t *dev) {
   double p = percent / 100.0;
   double gamma_level = pow(p, 2.2);
   uint8_t level = (uint8_t)(gamma_level * 255.0);
-  
-  // Ensure minimum backlight level
+
+  // Ensure minimum backlight level for visibility
   if (level < 2) {
-    level = 2; 
+    level = 2;
   }
 
   ili9341_set_backlight(dev, level);
