@@ -43,13 +43,8 @@
 #define DC_CMD() gpio_put(dev->config.pin_dc, 0)
 #define DC_DATA() gpio_put(dev->config.pin_dc, 1)
 
-// Maximum pixels per DMA burst for generic transfers
-#define DMA_CHUNK_PIXELS 512
 // Bytes per pixel (RGB565)
 #define BYTES_PER_PIXEL 2
-
-// Color storage for DMA repeat mode (fill operations) - stored as 2 bytes
-static uint8_t g_dma_fill_color_bytes[2] = {0, 0};
 
 /**
  * @brief Write command byte
@@ -91,53 +86,56 @@ static void write_cmd_data(ili9341_t *dev, uint8_t cmd, const uint8_t *data,
  */
 static void ili9341_set_window(ili9341_t *dev, uint16_t x0, uint16_t y0,
                                uint16_t x1, uint16_t y1) {
-  // Batch both CASET and PASET in single CS transaction for speed
   CS_LOW();
+  sleep_us(2);
 
-  // CASET command + data
   DC_CMD();
-  uint8_t caset_cmd = ILI9341_CASET;
-  spi_write_blocking(dev->config.spi, &caset_cmd, 1);
+  uint8_t cmd = ILI9341_CASET;
+  spi_write_blocking(dev->config.spi, &cmd, 1);
   DC_DATA();
-  uint8_t col_data[4] = {x0 >> 8, x0 & 0xFF, x1 >> 8, x1 & 0xFF};
-  spi_write_blocking(dev->config.spi, col_data, 4);
+  uint8_t col[4] = {x0 >> 8, x0 & 0xFF, x1 >> 8, x1 & 0xFF};
+  spi_write_blocking(dev->config.spi, col, 4);
 
-  // PASET command + data (no CS toggle!)
   DC_CMD();
-  uint8_t paset_cmd = ILI9341_PASET;
-  spi_write_blocking(dev->config.spi, &paset_cmd, 1);
+  cmd = ILI9341_PASET;
+  spi_write_blocking(dev->config.spi, &cmd, 1);
   DC_DATA();
-  uint8_t row_data[4] = {y0 >> 8, y0 & 0xFF, y1 >> 8, y1 & 0xFF};
-  spi_write_blocking(dev->config.spi, row_data, 4);
+  uint8_t row[4] = {y0 >> 8, y0 & 0xFF, y1 >> 8, y1 & 0xFF};
+  spi_write_blocking(dev->config.spi, row, 4);
 
-  // RAMWR command
   DC_CMD();
-  uint8_t ramwr_cmd = ILI9341_RAMWR;
-  spi_write_blocking(dev->config.spi, &ramwr_cmd, 1);
+  cmd = ILI9341_RAMWR;
+  spi_write_blocking(dev->config.spi, &cmd, 1);
 
-  // Note: CS stays LOW for continuous transaction - caller handles CS_HIGH
+  DC_DATA();
+  sleep_us(1);
 }
 
 // DMA IRQ handler for automatic completion signaling
 static ili9341_t *g_dma_device = NULL;
 
 static void __isr ili9341_dma_irq_handler(void) {
-  if (g_dma_device && g_dma_device->dma_channel >= 0) {
-    if (dma_hw->ints0 & (1u << g_dma_device->dma_channel)) {
-      // Clear interrupt flag
-      dma_hw->ints0 = 1u << g_dma_device->dma_channel;
+  if (!g_dma_device)
+    return;
+  int ch = g_dma_device->dma_channel;
 
-      // Wait for SPI to finish shifting remaining bytes
-      while (spi_is_busy(g_dma_device->config.spi)) {
-        tight_loop_contents();
-      }
-
-      // End transaction (direct GPIO write)
-      gpio_put(g_dma_device->config.pin_cs, 1);
-
-      // Mark DMA as idle
-      g_dma_device->dma_busy = false;
+  if (dma_hw->ints0 & (1u << ch)) {
+    dma_hw->ints0 = 1u << ch;
+    
+    // Wait for SPI to finish shifting remaining bytes
+    while (spi_is_busy(g_dma_device->config.spi)) {
+      tight_loop_contents();
     }
+    
+    // End transaction
+    gpio_put(g_dma_device->config.pin_cs, 1);
+    
+    // Restore 8-bit mode if we were in 16-bit pixel transfer mode
+    if (g_dma_device->config.use_16bit_pixel_transfer) {
+      spi_set_format(g_dma_device->config.spi, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+    }
+    
+    g_dma_device->dma_busy = false;
   }
 }
 
@@ -316,6 +314,9 @@ bool ili9341_send_pixels_dma(ili9341_t *dev, const uint16_t *buffer,
   CS_LOW();
   DC_DATA();
 
+  // Clear any stale interrupt flag before starting
+  dma_hw->ints0 = 1u << dev->dma_channel;
+
   dma_channel_configure(dev->dma_channel, &c,
                         &spi_get_hw(dev->config.spi)->dr, // dest
                         buffer,                           // src (bytes)
@@ -323,7 +324,7 @@ bool ili9341_send_pixels_dma(ili9341_t *dev, const uint16_t *buffer,
                         true                              // start immediately
   );
 
-  // IRQ handler will set CS_HIGH and clear dma_busy
+  // IRQ handler will clear dma_busy
   return true;
 }
 
@@ -388,43 +389,58 @@ uint16_t ili9341_get_width(ili9341_t *dev) { return dev->width; }
 
 uint16_t ili9341_get_height(ili9341_t *dev) { return dev->height; }
 
+void ili9341_set_pixel_transfer_mode(ili9341_t *dev, bool use_16bit) {
+  dev->config.use_16bit_pixel_transfer = use_16bit;
+  printf("[ILI9341] Pixel transfer mode: %s\n", use_16bit ? "16-bit" : "8-bit");
+}
+
+bool ili9341_get_pixel_transfer_mode(ili9341_t *dev) {
+  return dev->config.use_16bit_pixel_transfer;
+}
+
 // Fast rectangle fill with single window setup
 void ili9341_fill_rect(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
                        uint16_t h, uint16_t color) {
-  // Bounds check
   if (x >= dev->width || y >= dev->height)
     return;
   if (x + w > dev->width)
     w = dev->width - x;
   if (y + h > dev->height)
     h = dev->height - y;
-
-  uint32_t pixel_count = w * h;
-  if (pixel_count == 0)
+  if (!w || !h)
     return;
 
-  // Set window once (CS already LOW from set_window)
+  uint32_t pixels = (uint32_t)w * h;
+
   ili9341_set_window(dev, x, y, x + w - 1, y + h - 1);
 
-  // Prepare swapped color for ILI9341 (big-endian)
-  uint16_t swapped_color = (color >> 8) | (color << 8);
-
-  // Use stack buffer for speed (512 pixels = 1KB)
 #define FAST_CHUNK 512
-  uint16_t buffer[FAST_CHUNK];
-  for (int i = 0; i < FAST_CHUNK; i++) {
-    buffer[i] = swapped_color;
-  }
+  static uint16_t buf[FAST_CHUNK];
 
-  // CS already LOW, just set data mode
-  DC_DATA();
-
-  // Send in chunks
-  uint32_t remaining = pixel_count;
-  while (remaining > 0) {
-    uint32_t chunk = (remaining > FAST_CHUNK) ? FAST_CHUNK : remaining;
-    spi_write_blocking(dev->config.spi, (const uint8_t *)buffer, chunk * 2);
-    remaining -= chunk;
+  // Switch to appropriate SPI mode for pixel transfer
+  if (dev->config.use_16bit_pixel_transfer) {
+    // 16-bit mode: no swap needed (SPI MSB_FIRST handles byte order)
+    for (int i = 0; i < FAST_CHUNK; i++)
+      buf[i] = color;
+      
+    spi_set_format(dev->config.spi, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+    while (pixels) {
+      uint32_t chunk = pixels > FAST_CHUNK ? FAST_CHUNK : pixels;
+      spi_write16_blocking(dev->config.spi, buf, chunk);
+      pixels -= chunk;
+    }
+    spi_set_format(dev->config.spi, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+  } else {
+    // 8-bit mode: need byte swap
+    uint16_t swapped = __builtin_bswap16(color);
+    for (int i = 0; i < FAST_CHUNK; i++)
+      buf[i] = swapped;
+      
+    while (pixels) {
+      uint32_t chunk = pixels > FAST_CHUNK ? FAST_CHUNK : pixels;
+      spi_write_blocking(dev->config.spi, (uint8_t *)buf, chunk * 2);
+      pixels -= chunk;
+    }
   }
 
   CS_HIGH();
@@ -453,56 +469,66 @@ void ili9341_fill_screen(ili9341_t *dev, uint16_t color) {
  */
 bool ili9341_fill_rect_async(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
                              uint16_t h, uint16_t color) {
-  // Check if DMA is busy
-  if (dev->dma_busy) {
+  if (dev->dma_busy || dev->dma_channel < 0)
     return false;
-  }
 
-  // Bounds check
   if (x >= dev->width || y >= dev->height)
     return false;
   if (x + w > dev->width)
     w = dev->width - x;
   if (y + h > dev->height)
     h = dev->height - y;
-
-  uint32_t pixel_count = w * h;
-  if (pixel_count == 0)
+  if (!w || !h)
     return false;
 
-  uint32_t byte_count = pixel_count * BYTES_PER_PIXEL;
+  uint32_t pixels = (uint32_t)w * h;
 
-  // Prepare swapped color for ILI9341 (byte order)
-  uint16_t swapped_color = (color >> 8) | (color << 8);
-  g_dma_fill_color_bytes[0] = (uint8_t)(swapped_color & 0xFF);
-  g_dma_fill_color_bytes[1] = (uint8_t)(swapped_color >> 8);
-
-  // Set window (CS already LOW from set_window)
   ili9341_set_window(dev, x, y, x + w - 1, y + h - 1);
 
-  // Mark DMA as busy
   dev->dma_busy = true;
 
-  // Configure DMA with 2-byte ring buffer:
-  // - Transfer size: 8-bit (matches SPI format)
-  // - Read increment: true, but wraps every 2 bytes (ring buffer)
-  // - Ring: true with size=2 (power of 2)
   dma_channel_config c = dma_channel_get_default_config(dev->dma_channel);
-  channel_config_set_transfer_data_size(&c, DMA_SIZE_8); // 8-bit matches SPI
-  channel_config_set_dreq(&c, spi_get_dreq(dev->config.spi, true));
-  channel_config_set_read_increment(&c, true);
-  channel_config_set_write_increment(&c, false);
-  channel_config_set_ring(&c, false, 1); // Ring on read, size=2^1=2 bytes
+  
+  if (dev->config.use_16bit_pixel_transfer) {
+    // 16-bit mode: repeat single 16-bit value (no swap - SPI MSB_FIRST handles it)
+    static uint16_t color_16;
+    color_16 = color;
+    
+    spi_set_format(dev->config.spi, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+    
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_16);
+    channel_config_set_read_increment(&c, false);  // Repeat mode
+    channel_config_set_write_increment(&c, false);
+    channel_config_set_dreq(&c, spi_get_dreq(dev->config.spi, true));
 
-  // CS already LOW, just set data mode
-  DC_DATA();
+    dma_hw->ints0 = 1u << dev->dma_channel;
 
-  // Clear any stale interrupt flag before starting
-  dma_hw->ints0 = 1u << dev->dma_channel;
+    dma_channel_configure(dev->dma_channel, &c,
+                          &spi_get_hw(dev->config.spi)->dr,
+                          &color_16,
+                          pixels,  // Transfer count in 16-bit words
+                          true);
+  } else {
+    // 8-bit mode: ring buffer over 2 bytes
+    static uint8_t color_bytes[2];
+    uint16_t swapped = __builtin_bswap16(color);
+    color_bytes[0] = (uint8_t)(swapped & 0xFF);
+    color_bytes[1] = (uint8_t)(swapped >> 8);
+    
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+    channel_config_set_read_increment(&c, true);
+    channel_config_set_write_increment(&c, false);
+    channel_config_set_ring(&c, false, 1);  // Ring on read, size=2^1=2 bytes
+    channel_config_set_dreq(&c, spi_get_dreq(dev->config.spi, true));
 
-  // Start DMA: send byte_count bytes, reading from 2-byte ring buffer
-  dma_channel_configure(dev->dma_channel, &c, &spi_get_hw(dev->config.spi)->dr,
-                        g_dma_fill_color_bytes, byte_count, true);
+    dma_hw->ints0 = 1u << dev->dma_channel;
+
+    dma_channel_configure(dev->dma_channel, &c,
+                          &spi_get_hw(dev->config.spi)->dr,
+                          color_bytes,
+                          pixels * 2,  // Transfer count in bytes
+                          true);
+  }
 
   return true;
 }
@@ -519,44 +545,51 @@ bool ili9341_fill_screen_async(ili9341_t *dev, uint16_t color) {
 
 void ili9341_draw_pixel(ili9341_t *dev, uint16_t x, uint16_t y,
                         uint16_t color) {
-  if (x >= dev->width || y >= dev->height) {
-    return; // Out of bounds
-  }
+  if (x >= dev->width || y >= dev->height)
+    return;
 
-  // Set window to single pixel (CS already LOW from set_window)
+  uint16_t swapped = __builtin_bswap16(color);
+
   ili9341_set_window(dev, x, y, x, y);
-
-  // Swap bytes for ILI9341
-  uint16_t swapped_color = (color >> 8) | (color << 8);
-
-  // CS already LOW, just set data mode
-  DC_DATA();
-  spi_write_blocking(dev->config.spi, (const uint8_t *)&swapped_color, 2);
+  spi_write_blocking(dev->config.spi, (uint8_t *)&swapped, 2);
   CS_HIGH();
 }
 
 void ili9341_draw_line(ili9341_t *dev, uint16_t x0, uint16_t y0, uint16_t x1,
                        uint16_t y1, uint16_t color) {
-  // Bresenham's line algorithm
-  int16_t dx = abs(x1 - x0);
-  int16_t dy = abs(y1 - y0);
-  int16_t sx = (x0 < x1) ? 1 : -1;
-  int16_t sy = (y0 < y1) ? 1 : -1;
-  int16_t err = dx - dy;
+  // Fast path: vertical line
+  if (x0 == x1) {
+    uint16_t y = y0 < y1 ? y0 : y1;
+    ili9341_fill_rect(dev, x0, y, 1, abs(y1 - y0) + 1, color);
+    return;
+  }
+
+  // Fast path: horizontal line
+  if (y0 == y1) {
+    uint16_t x = x0 < x1 ? x0 : x1;
+    ili9341_fill_rect(dev, x, y0, abs(x1 - x0) + 1, 1, color);
+    return;
+  }
+
+  // Diagonal: use Bresenham pixel-by-pixel
+  int dx = abs((int)x1 - x0);
+  int dy = abs((int)y1 - y0);
+  int sx = x0 < x1 ? 1 : -1;
+  int sy = y0 < y1 ? 1 : -1;
+  int err = dx - dy;
 
   while (true) {
     ili9341_draw_pixel(dev, x0, y0, color);
 
-    if (x0 == x1 && y0 == y1) {
+    if (x0 == x1 && y0 == y1)
       break;
-    }
 
-    int16_t e2 = 2 * err;
-    if (e2 > -dy) {
+    int e2 = err * 2;
+    if (e2 >= -dy) {
       err -= dy;
       x0 += sx;
     }
-    if (e2 < dx) {
+    if (e2 <= dx) {
       err += dx;
       y0 += sy;
     }

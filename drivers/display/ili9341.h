@@ -68,6 +68,9 @@ typedef struct {
   uint8_t pin_led;  // Backlight (optional, 255 = not used)
   uint8_t pin_sck;  // SPI Clock
   uint8_t pin_mosi; // SPI MOSI
+
+  /** Pixel transfer mode: true = 16-bit SPI, false = 8-bit SPI */
+  bool use_16bit_pixel_transfer;
 } ili9341_config_t;
 
 /**
@@ -121,6 +124,20 @@ bool ili9341_dma_is_idle(ili9341_t *dev);
  * @return DMA channel or -1 if not claimed
  */
 int ili9341_get_dma_channel(ili9341_t *dev);
+
+/**
+ * @brief Set pixel transfer mode (8-bit or 16-bit SPI)
+ * @param dev Device context
+ * @param use_16bit true for 16-bit mode, false for 8-bit mode
+ */
+void ili9341_set_pixel_transfer_mode(ili9341_t *dev, bool use_16bit);
+
+/**
+ * @brief Get current pixel transfer mode
+ * @param dev Device context
+ * @return true if 16-bit mode, false if 8-bit mode
+ */
+bool ili9341_get_pixel_transfer_mode(ili9341_t *dev);
 
 /**
  * @brief Set backlight brightness

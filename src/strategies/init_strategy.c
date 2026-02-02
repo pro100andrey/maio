@@ -35,6 +35,7 @@ static void init_on_enter(void) {
       .pin_led = PIN_TFT_LED,
       .pin_sck = PIN_TFT_SCK,
       .pin_mosi = PIN_TFT_MOSI,
+      .use_16bit_pixel_transfer = TFT_USE_16BIT_PIXEL_TRANSFER,
   };
 
   // Initialize driver (non-blocking)

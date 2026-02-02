@@ -138,15 +138,31 @@ static void scene_backlight_ramp(ili9341_t *dev) {
   }
 }
 
+/**
+ * @brief Scene: Toggle pixel transfer mode (8-bit/16-bit SPI)
+ */
+static void scene_toggle_spi_mode(ili9341_t *dev) {
+  bool current = ili9341_get_pixel_transfer_mode(dev);
+  bool next = !current;
+  ili9341_set_pixel_transfer_mode(dev, next);
+  printf("[Test] SPI mode: %s\n", next ? "16-bit" : "8-bit");
+
+  // Test fill with new mode
+  ili9341_fill_screen(dev, 0x07E0); // Green
+  sleep_ms(500);
+  ili9341_fill_screen(dev, 0x001F); // Blue
+}
+
 /** Array of scene functions */
 static scene_fn_t scenes[] = {scene_full_sync,          scene_full_async,
                               scene_quadrants,          scene_stripes_async,
-                              scene_orientation_toggle, scene_backlight_ramp};
+                              scene_orientation_toggle, scene_backlight_ramp,
+                              scene_toggle_spi_mode};
 
 /** Scene names for logging */
-static const char *scene_names[] = {"Sync fill",   "Async fill",
-                                    "Quadrants",   "Stripes async",
-                                    "Orientation", "Backlight"};
+static const char *scene_names[] = {"Sync fill",     "Async fill",  "Quadrants",
+                                    "Stripes async", "Orientation", "Backlight",
+                                    "SPI mode"};
 
 /**
  * @brief Execute currently selected scene
