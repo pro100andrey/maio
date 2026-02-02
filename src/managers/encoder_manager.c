@@ -7,6 +7,9 @@
 /** Encoder instance */
 static encoder_t encoder;
 
+/** Previous button state for edge detection */
+static bool prev_button_state = false;
+
 /** Internal timer for polling */
 static struct repeating_timer encoder_timer;
 
@@ -26,13 +29,21 @@ static bool encoder_timer_callback(struct repeating_timer *t) {
     event_manager_post(&ev);
   }
 
-  // Check for button press
-  if (encoder.btn_pressed) {
-    // Clear flag
-    encoder.btn_pressed = false;
-    // payload=1 for pressed
-    event_t ev = {.type = EV_ENCODER_BUTTON, .payload = 1};
-    event_manager_post(&ev);
+  // Check for button state changes
+  bool current_button_state = !gpio_get(encoder.pin_sw); // Active low
+
+  if (current_button_state != prev_button_state) {
+    // Button state changed
+    if (current_button_state) {
+      // Button pressed (payload = 1)
+      event_t ev = {.type = EV_ENCODER_BUTTON, .payload = 1};
+      event_manager_post(&ev);
+    } else {
+      // Button released (payload = 0)
+      event_t ev = {.type = EV_ENCODER_BUTTON, .payload = 0};
+      event_manager_post(&ev);
+    }
+    prev_button_state = current_button_state;
   }
 
   return true; // Keep repeating

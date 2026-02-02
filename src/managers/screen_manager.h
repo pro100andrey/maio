@@ -17,8 +17,9 @@ typedef enum {
   SCREEN_2 = 1,
   SCREEN_3 = 2,
   SCREEN_4 = 3,
-  SCREEN_SETTINGS = 4,
-  SCREEN_COUNT = 5
+  SCREEN_MULTIMETER = 4,
+  SCREEN_SETTINGS = 5,
+  SCREEN_COUNT = 6
 } screen_id_t;
 
 /**
@@ -52,5 +53,12 @@ void screen_manager_prev(void);
  * @brief Update screen content (if needed)
  */
 void screen_manager_update(void);
+
+/**
+ * @brief Handle encoder rotation on current screen
+ * @param direction Rotation direction (positive = clockwise, negative =
+ * counter-clockwise)
+ */
+void screen_manager_encoder_rotate(int direction);
 
 #endif // SCREEN_MANAGER_H

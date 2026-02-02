@@ -8,6 +8,7 @@
 #include "../screens/screen_2.h"
 #include "../screens/screen_3.h"
 #include "../screens/screen_4.h"
+#include "../screens/screen_multimeter.h"
 #include "../screens/screen_settings.h"
 #include <stdio.h>
 
@@ -25,6 +26,7 @@ void screen_manager_init(void) {
   screens[SCREEN_2] = screen_2_create();
   screens[SCREEN_3] = screen_3_create();
   screens[SCREEN_4] = screen_4_create();
+  screens[SCREEN_MULTIMETER] = screen_multimeter_create();
   screens[SCREEN_SETTINGS] = screen_settings_create();
 
   // Show first screen
@@ -48,8 +50,16 @@ void screen_manager_show(screen_id_t screen_id) {
 
   printf("[ScreenMgr] Switching to screen %d\n", screen_id);
 
+  // Exit callback for previous screen
+  if (current_screen == SCREEN_MULTIMETER) {
+    screen_multimeter_on_exit();
+  }
+
   // Update screen content before showing
   switch (screen_id) {
+  case SCREEN_MULTIMETER:
+    screen_multimeter_on_enter();
+    break;
   case SCREEN_SETTINGS:
     screen_settings_update();
     break;
@@ -76,10 +86,21 @@ void screen_manager_prev(void) {
 void screen_manager_update(void) {
   // Update current screen if needed
   switch (current_screen) {
+  case SCREEN_MULTIMETER:
+    screen_multimeter_update();
+    break;
   case SCREEN_SETTINGS:
     screen_settings_update();
     break;
   default:
     break;
   }
+}
+
+void screen_manager_encoder_rotate(int direction) {
+  // Handle encoder rotation based on current screen
+  if (current_screen == SCREEN_MULTIMETER) {
+    screen_multimeter_encoder_rotate(direction);
+  }
+  // Other screens don't use encoder rotation
 }

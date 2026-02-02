@@ -4,7 +4,6 @@
  */
 
 #include "ui_strategy.h"
-#include "../managers/display_manager.h"
 #include "../managers/screen_manager.h"
 #include "../shared/events.h"
 #include "idle_strategy.h"
@@ -41,12 +40,8 @@ static void ui_on_exit(void) { printf("[UI] UI mode deactivated\n"); }
 static void ui_on_event(const event_t *event) {
   switch (event->type) {
   case EV_ENCODER_ROTATE: {
-    // Rotate encoder switches screens
-    if (event->payload > 0) {
-      screen_manager_next();
-    } else {
-      screen_manager_prev();
-    }
+    // Encoder rotation now used for menu navigation on multimeter screen
+    screen_manager_encoder_rotate(event->payload);
     break;
   }
 
@@ -55,15 +50,24 @@ static void ui_on_event(const event_t *event) {
       // Button pressed - record time for long press detection
       button_press_time = to_ms_since_boot(get_absolute_time());
     } else if (event->payload == 0 && button_press_time > 0) {
-      // Button released - check if it was long press (>1 second)
+      // Button released - check press duration
       uint32_t press_duration =
           to_ms_since_boot(get_absolute_time()) - button_press_time;
-      if (press_duration > 1000) {
-        printf("[UI] Long press detected - returning to idle\n");
-        strategy_switch(&idle_strategy);
+
+      if (press_duration > 3000) {
+        // Long press (>3 seconds) - exit multimeter mode or return to idle
+        screen_id_t current = screen_manager_get_current();
+        if (current == SCREEN_MULTIMETER) {
+          printf("[UI] Long press on multimeter - exiting to screen 1\n");
+          screen_manager_show(SCREEN_1);
+        } else {
+          printf("[UI] Long press - returning to idle\n");
+          strategy_switch(&idle_strategy);
+        }
       } else {
-        printf("[UI] Short press - screen action\n");
-        // TODO: Handle short press for screen-specific actions
+        // Short press - switch to next screen
+        printf("[UI] Short press - next screen\n");
+        screen_manager_next();
       }
       button_press_time = 0;
     }
