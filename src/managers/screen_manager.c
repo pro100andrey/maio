@@ -51,12 +51,22 @@ void screen_manager_show(screen_id_t screen_id) {
   printf("[ScreenMgr] Switching to screen %d\n", screen_id);
 
   // Exit callback for previous screen
-  if (current_screen == SCREEN_MULTIMETER) {
+  switch (current_screen) {
+  case SCREEN_2:
+    screen_2_on_hide();
+    break;
+  case SCREEN_MULTIMETER:
     screen_multimeter_on_exit();
+    break;
+  default:
+    break;
   }
 
   // Update screen content before showing
   switch (screen_id) {
+  case SCREEN_2:
+    screen_2_on_show();
+    break;
   case SCREEN_MULTIMETER:
     screen_multimeter_on_enter();
     break;
@@ -99,8 +109,15 @@ void screen_manager_update(void) {
 
 void screen_manager_encoder_rotate(int direction) {
   // Handle encoder rotation based on current screen
-  if (current_screen == SCREEN_MULTIMETER) {
+  switch (current_screen) {
+  case SCREEN_2:
+    screen_2_encoder_rotate(direction);
+    break;
+  case SCREEN_MULTIMETER:
     screen_multimeter_encoder_rotate(direction);
+    break;
+  default:
+    // Other screens don't use encoder rotation
+    break;
   }
-  // Other screens don't use encoder rotation
 }

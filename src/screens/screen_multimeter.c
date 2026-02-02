@@ -1,6 +1,5 @@
 #include "screen_multimeter.h"
 #include "../shared/digital_display.h"
-#include <stdio.h>
 #include <stdlib.h>
 
 // Multimeter screen components

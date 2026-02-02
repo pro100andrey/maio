@@ -71,7 +71,7 @@ void encoder_poll(encoder_t *enc) {
     } else {
       enc->rotation--;
     }
-    
+
     enc->last_rotation_time = now;
   }
 
@@ -79,11 +79,17 @@ void encoder_poll(encoder_t *enc) {
   enc->last_a_state = a;
   enc->last_b_state = b;
 
-  // Detect button press on falling edge (HIGH to LOW)
-  // Button pulls GPIO to GND when pressed
-  if (!sw && enc->last_sw_state &&
+  // Detect button state changes
+  // Button pulls GPIO to GND when pressed (active low)
+  if (sw != enc->last_sw_state &&
       (now - enc->last_button_time > ENCODER_BUTTON_DEBOUNCE_MS)) {
-    enc->btn_pressed = true;
+    if (!sw && enc->last_sw_state) {
+      // Falling edge: button pressed
+      enc->btn_pressed = true;
+    } else if (sw && !enc->last_sw_state) {
+      // Rising edge: button released
+      enc->btn_pressed = false;
+    }
     enc->last_button_time = now;
   }
 
