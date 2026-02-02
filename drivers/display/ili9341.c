@@ -125,8 +125,12 @@ static void ili9341_set_window_open(ili9341_t *dev, uint16_t x0, uint16_t y0,
 
 /**
  * @brief Close window transaction (raise CS)
+ * @note Invalidates window cache since CS HIGH resets display's internal window
  */
-static inline void ili9341_window_close(ili9341_t *dev) { CS_HIGH(); }
+static inline void ili9341_window_close(ili9341_t *dev) {
+  CS_HIGH();
+  g_window_valid = false; // Display forgets window when CS goes high
+}
 
 /**
  * @brief Set address window with caching (optimized for repeated operations)

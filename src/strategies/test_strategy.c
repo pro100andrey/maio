@@ -54,13 +54,20 @@ static void scene_full_sync(ili9341_t *dev) {
 
 /**
  * @brief Scene: Asynchronous full screen fill (DMA)
+ * Shows DMA launch time vs total time (with wait)
  */
 static void scene_full_async(ili9341_t *dev) {
   static int idx = 0;
   idx = (idx + 1) % 3;
   printf("[Test] Async fill %s\n", color_names[idx]);
+
+  uint32_t start = time_us_32();
   if (ili9341_fill_screen_async(dev, colors[idx])) {
+    uint32_t launch_time = time_us_32() - start;
     wait_dma(dev);
+    uint32_t total_time = time_us_32() - start;
+    printf("[Test] Launch: %u us, Total: %u us (CPU free: %.1f ms)\n",
+           launch_time, total_time, (total_time - launch_time) / 1000.0);
   }
 }
 
@@ -83,19 +90,37 @@ static void scene_quadrants(ili9341_t *dev) {
 
 /**
  * @brief Scene: Vertical color stripes (async DMA)
+ * Properly overlaps computation with DMA transfers
  */
 static void scene_stripes_async(ili9341_t *dev) {
   uint16_t w = ili9341_get_width(dev);
   uint16_t h = ili9341_get_height(dev);
   uint16_t stripe = w / 6;
   printf("[Test] Vertical stripes async\n");
+
+  uint32_t start = time_us_32();
   for (int i = 0; i < 6; i++) {
-    uint16_t x = i * stripe;
-    uint16_t c = colors[i % 3];
-    if (ili9341_fill_rect_async(dev, x, 0, (i == 5) ? (w - x) : stripe, h, c)) {
+    // Wait for previous DMA to finish before starting next
+    if (i > 0) {
       wait_dma(dev);
     }
+
+    uint16_t x = i * stripe;
+    uint16_t c = colors[i % 3];
+    ili9341_fill_rect_async(dev, x, 0, (i == 5) ? (w - x) : stripe, h, c);
+
+    // CPU is free here! Could do other work...
+    // For demo, just print to show overlap
+    if (i < 5) {
+      printf("[Test]   Stripe %d launched, CPU doing work while DMA runs...\n",
+             i);
+    }
   }
+  // Wait for last stripe to complete
+  wait_dma(dev);
+  uint32_t elapsed = time_us_32() - start;
+  printf("[Test] Total time with async overlap: %u us (%.2f ms)\n", elapsed,
+         elapsed / 1000.0);
 }
 
 /**
@@ -231,29 +256,56 @@ static void scene_dma_threshold(ili9341_t *dev) {
 }
 
 /**
- * @brief Scene: Mixed drawing operations
- * Tests combination of primitives with different optimizations
+ * @brief Scene: Mixed drawing operations (async pipeline)
+ * Demonstrates proper async operation chaining with CPU/DMA overlap
  */
 static void scene_mixed_ops(ili9341_t *dev) {
-  printf("[Test] Mixed operations - primitives combination\n");
+  printf("[Test] Mixed operations - async pipeline\n");
 
   uint16_t w = ili9341_get_width(dev);
   uint16_t h = ili9341_get_height(dev);
+  uint32_t start = time_us_32();
 
-  // Background
-  ili9341_fill_screen(dev, 0x0000);
+  // Step 1: Launch background fill (async)
+  ili9341_fill_screen_async(dev, 0x0000);
+  printf("[Test]   1. Background DMA started, CPU free for work...\n");
 
-  // Colored rectangles
-  ili9341_fill_rect(dev, 10, 10, 60, 40, 0xF800);  // Red
-  ili9341_fill_rect(dev, 80, 10, 60, 40, 0x07E0);  // Green
-  ili9341_fill_rect(dev, 150, 10, 60, 40, 0x001F); // Blue
+  // CPU work: Prepare next operation parameters while DMA runs
+  uint16_t rect_params[][5] = {
+      {10, 10, 60, 40, 0xF800}, // Red
+      {80, 10, 60, 40, 0x07E0}, // Green
+      {150, 10, 60, 40, 0x001F} // Blue
+  };
 
-  // Lines (horizontal, vertical, diagonal)
+  // Step 2: Wait for background, launch first rectangle
+  wait_dma(dev);
+  ili9341_fill_rect_async(dev, rect_params[0][0], rect_params[0][1],
+                          rect_params[0][2], rect_params[0][3],
+                          rect_params[0][4]);
+  printf("[Test]   2. Red rect DMA started...\n");
+
+  // Step 3: Wait, launch green rectangle
+  wait_dma(dev);
+  ili9341_fill_rect_async(dev, rect_params[1][0], rect_params[1][1],
+                          rect_params[1][2], rect_params[1][3],
+                          rect_params[1][4]);
+  printf("[Test]   3. Green rect DMA started...\n");
+
+  // Step 4: Wait, launch blue rectangle
+  wait_dma(dev);
+  ili9341_fill_rect_async(dev, rect_params[2][0], rect_params[2][1],
+                          rect_params[2][2], rect_params[2][3],
+                          rect_params[2][4]);
+  printf("[Test]   4. Blue rect DMA started...\n");
+
+  // Step 5: Wait for blue rect, draw lines (sync operations - small data)
+  wait_dma(dev);
   ili9341_draw_line(dev, 0, 60, w - 1, 60, 0xFFFF);       // Horizontal
   ili9341_draw_line(dev, 120, 70, 120, h - 10, 0xFFFF);   // Vertical
   ili9341_draw_line(dev, 10, 70, w - 10, h - 10, 0xFFE0); // Diagonal
+  printf("[Test]   5. Lines drawn (sync)\n");
 
-  // Pixels (star pattern)
+  // Step 6: Draw pixels (star pattern) - sync, small operations
   uint16_t cx = w / 2, cy = h - 50;
   for (int angle = 0; angle < 360; angle += 30) {
     double rad = angle * 3.14159 / 180.0;
@@ -261,6 +313,11 @@ static void scene_mixed_ops(ili9341_t *dev) {
     int py = cy + (int)(30 * sin(rad));
     ili9341_draw_pixel(dev, px, py, 0xF81F); // Magenta
   }
+  printf("[Test]   6. Star pattern drawn\n");
+
+  uint32_t elapsed = time_us_32() - start;
+  printf("[Test] Total async pipeline: %u us (%.2f ms)\n", elapsed,
+         elapsed / 1000.0);
 }
 
 /**
@@ -278,12 +335,16 @@ static void scene_benchmark(ili9341_t *dev) {
   elapsed = time_us_32() - start;
   printf("  Full screen sync: %u us (%.2f ms)\n", elapsed, elapsed / 1000.0);
 
-  // Full screen fill (async DMA)
+  // Full screen fill (async DMA) - measure launch vs total
   start = time_us_32();
   ili9341_fill_screen_async(dev, 0xFFFF);
+  uint32_t launch = time_us_32() - start;
   wait_dma(dev);
   elapsed = time_us_32() - start;
-  printf("  Full screen async: %u us (%.2f ms)\n", elapsed, elapsed / 1000.0);
+  printf("  Full screen async: launch=%u us, total=%u us (%.2f ms)\n", launch,
+         elapsed, elapsed / 1000.0);
+  printf("  CPU free time: %.2f ms (%.0f%%)\n", (elapsed - launch) / 1000.0,
+         (float)(elapsed - launch) / elapsed * 100);
 
   // Small rectangles (100x50)
   start = time_us_32();
