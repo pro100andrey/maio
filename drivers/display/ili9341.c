@@ -46,6 +46,14 @@
 // Bytes per pixel (RGB565)
 #define BYTES_PER_PIXEL 2
 
+// DMA overhead threshold: use blocking for small transfers
+#define DMA_THRESHOLD_BYTES 2048
+
+// Window caching for performance optimization
+static uint16_t g_window_x0 = 0xFFFF, g_window_y0 = 0xFFFF;
+static uint16_t g_window_x1 = 0, g_window_y1 = 0;
+static bool g_window_valid = false;
+
 /**
  * @brief Write command byte
  */
@@ -118,6 +126,37 @@ static void ili9341_set_window_open(ili9341_t *dev, uint16_t x0, uint16_t y0,
  * @brief Close window transaction (raise CS)
  */
 static inline void ili9341_window_close(ili9341_t *dev) { CS_HIGH(); }
+
+/**
+ * @brief Set address window with caching (optimized for repeated operations)
+ * @note If window coordinates match cached values, only sends RAMWR command.
+ *       This saves ~20μs per operation when drawing multiple objects in same window.
+ */
+static void ili9341_set_window_cached(ili9341_t *dev, uint16_t x0, uint16_t y0,
+                                      uint16_t x1, uint16_t y1) {
+  if (g_window_valid && x0 == g_window_x0 && y0 == g_window_y0 &&
+      x1 == g_window_x1 && y1 == g_window_y1) {
+    // Window unchanged, fast path: just reopen CS and send RAMWR
+    CS_LOW();
+    sleep_us(2);
+    DC_CMD();
+    uint8_t cmd = ILI9341_RAMWR;
+    spi_write_blocking(dev->config.spi, &cmd, 1);
+    DC_DATA();
+    sleep_us(1);
+    return;
+  }
+
+  // Full window setup (coordinates changed or first call)
+  ili9341_set_window_open(dev, x0, y0, x1, y1);
+
+  // Update cache
+  g_window_x0 = x0;
+  g_window_y0 = y0;
+  g_window_x1 = x1;
+  g_window_y1 = y1;
+  g_window_valid = true;
+}
 
 // DMA IRQ handler for automatic completion signaling
 static ili9341_t *g_dma_device = NULL;
@@ -343,6 +382,40 @@ bool ili9341_dma_is_idle(ili9341_t *dev) { return !dev->dma_busy; }
 
 int ili9341_get_dma_channel(ili9341_t *dev) { return dev->dma_channel; }
 
+/**
+ * @brief Send pixel buffer with automatic DMA/blocking selection
+ * @param dev Device context
+ * @param buffer Pixel buffer (RGB565)
+ * @param pixels Number of pixels to send
+ * @note Uses blocking transfer for small data (< 2KB) or when DMA is busy.
+ *       Uses DMA for large transfers when available.
+ *       Caller should set window before calling (CS will be managed here).
+ */
+void ili9341_send_pixels(ili9341_t *dev, const uint16_t *buffer, size_t pixels) {
+  size_t bytes = pixels * BYTES_PER_PIXEL;
+
+  // Use blocking for small transfers (DMA overhead > benefit) or if DMA busy
+  if (bytes < DMA_THRESHOLD_BYTES || dev->dma_busy || dev->dma_channel < 0) {
+    CS_LOW();
+    DC_DATA();
+
+    if (dev->config.use_16bit_pixel_transfer) {
+      // 16-bit mode
+      spi_set_format(dev->config.spi, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+      spi_write16_blocking(dev->config.spi, buffer, pixels);
+      spi_set_format(dev->config.spi, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+    } else {
+      // 8-bit mode (data already in correct byte order)
+      spi_write_blocking(dev->config.spi, (const uint8_t *)buffer, bytes);
+    }
+
+    CS_HIGH();
+  } else {
+    // Large transfer: use DMA (non-blocking)
+    ili9341_send_pixels_dma(dev, buffer, pixels);
+  }
+}
+
 void ili9341_set_backlight(ili9341_t *dev, uint8_t brightness) {
   if (dev->config.pin_led != 255) {
     uint32_t slice = pwm_gpio_to_slice_num(dev->config.pin_led);
@@ -423,7 +496,7 @@ void ili9341_fill_rect(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
 
   uint32_t pixels = (uint32_t)w * h;
 
-  ili9341_set_window_open(dev, x, y, x + w - 1, y + h - 1);
+  ili9341_set_window_cached(dev, x, y, x + w - 1, y + h - 1);
 
 #define FAST_CHUNK 512
   static uint16_t buf[FAST_CHUNK];
@@ -494,7 +567,7 @@ bool ili9341_fill_rect_async(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
 
   uint32_t pixels = (uint32_t)w * h;
 
-  ili9341_set_window_open(dev, x, y, x + w - 1, y + h - 1);
+  ili9341_set_window_cached(dev, x, y, x + w - 1, y + h - 1);
 
   dev->dma_busy = true;
 
@@ -560,7 +633,7 @@ void ili9341_draw_pixel(ili9341_t *dev, uint16_t x, uint16_t y,
 
   uint16_t swapped = __builtin_bswap16(color);
 
-  ili9341_set_window_open(dev, x, y, x, y);
+  ili9341_set_window_cached(dev, x, y, x, y);
   spi_write_blocking(dev->config.spi, (uint8_t *)&swapped, 2);
   ili9341_window_close(dev);
 }
