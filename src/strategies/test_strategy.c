@@ -414,17 +414,60 @@ static void scene_pixel_buffer(ili9341_t *dev) {
          elapsed, elapsed / 1000.0);
 }
 
+/**
+ * @brief Scene: Power management test
+ * Tests sleep/wakeup, display on/off, and idle mode
+ */
+static void scene_power_management(ili9341_t *dev) {
+  printf("[Test] Power management test\n");
+
+  // Draw test pattern
+  ili9341_fill_screen(dev, 0x0000);
+  ili9341_fill_rect(dev, 50, 50, 100, 80, 0xF800);  // Red
+  ili9341_fill_rect(dev, 100, 90, 100, 80, 0x07E0); // Green
+  ili9341_fill_rect(dev, 70, 120, 100, 80, 0x001F); // Blue
+  printf("[Test]   Test pattern drawn\n");
+  sleep_ms(1000);
+
+  // Test display off/on
+  printf("[Test]   Display OFF for 2 sec...\n");
+  ili9341_display_off(dev);
+  sleep_ms(2000);
+  printf("[Test]   Display ON\n");
+  ili9341_display_on(dev);
+  sleep_ms(1000);
+
+  // Test idle mode (reduced colors)
+  printf("[Test]   Idle mode ON (8-color) for 2 sec...\n");
+  ili9341_set_idle_mode(dev, true);
+  sleep_ms(2000);
+  printf("[Test]   Idle mode OFF (65K-color)\n");
+  ili9341_set_idle_mode(dev, false);
+  sleep_ms(1000);
+
+  // Test sleep/wakeup
+  printf("[Test]   Sleep mode for 2 sec...\n");
+  ili9341_sleep(dev);
+  sleep_ms(2000);
+  printf("[Test]   Waking up (takes 120ms)...\n");
+  ili9341_wakeup(dev);
+
+  printf("[Test] Power management test complete\n");
+}
+
 static scene_fn_t scenes[] = {
     scene_full_sync,       scene_full_async,         scene_quadrants,
     scene_stripes_async,   scene_orientation_toggle, scene_backlight_ramp,
     scene_toggle_spi_mode, scene_window_caching,     scene_dma_threshold,
-    scene_mixed_ops,       scene_benchmark,          scene_pixel_buffer};
+    scene_mixed_ops,       scene_benchmark,          scene_pixel_buffer,
+    scene_power_management};
 
 /** Scene names for logging */
 static const char *scene_names[] = {
-    "Sync fill",     "Async fill", "Quadrants", "Stripes async",
-    "Orientation",   "Backlight",  "SPI mode",  "Window cache",
-    "DMA threshold", "Mixed ops",  "Benchmark", "Pixel buffer"};
+    "Sync fill",     "Async fill",  "Quadrants",     "Stripes async",
+    "Orientation",   "Backlight",   "SPI mode",      "Window cache",
+    "DMA threshold", "Mixed ops",   "Benchmark",     "Pixel buffer",
+    "Power mgmt"};
 
 /**
  * @brief Execute currently selected scene

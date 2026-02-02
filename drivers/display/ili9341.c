@@ -16,12 +16,16 @@
 
 // ILI9341 Commands
 #define ILI9341_SWRESET 0x01 // Software Reset
+#define ILI9341_SLPIN 0x10   // Sleep In
 #define ILI9341_SLPOUT 0x11  // Sleep Out
+#define ILI9341_DISPOFF 0x28 // Display OFF
 #define ILI9341_DISPON 0x29  // Display ON
 #define ILI9341_CASET 0x2A   // Column Address Set
 #define ILI9341_PASET 0x2B   // Page Address Set
 #define ILI9341_RAMWR 0x2C   // Memory Write
 #define ILI9341_MADCTL 0x36  // Memory Access Control
+#define ILI9341_IDMOFF 0x38  // Idle Mode OFF
+#define ILI9341_IDMON 0x39   // Idle Mode ON
 #define ILI9341_PIXFMT 0x3A  // Pixel Format Set
 #define ILI9341_FRMCTR1 0xB1 // Frame Rate Control (Normal Mode)
 #define ILI9341_DFUNCTR 0xB6 // Display Function Control
@@ -476,6 +480,8 @@ void ili9341_set_backlight(ili9341_t *dev, uint8_t brightness) {
     uint32_t slice = pwm_gpio_to_slice_num(dev->config.pin_led);
     pwm_set_chan_level(slice, pwm_gpio_to_channel(dev->config.pin_led),
                        brightness);
+    // Save current level for display_off/on
+    dev->backlight_level = brightness;
   }
 }
 
@@ -745,5 +751,60 @@ void ili9341_draw_line(ili9341_t *dev, uint16_t x0, uint16_t y0, uint16_t x1,
       err += dx;
       y0 += sy;
     }
+  }
+}
+
+// Power Management Functions
+
+void ili9341_sleep(ili9341_t *dev) {
+  write_cmd(dev, ILI9341_SLPIN);
+  sleep_ms(5); // Sleep In command takes effect after 5ms
+  // Turn off backlight to prevent white screen during sleep
+  if (dev->config.pin_led != 255) {
+    uint32_t slice = pwm_gpio_to_slice_num(dev->config.pin_led);
+    pwm_set_chan_level(slice, pwm_gpio_to_channel(dev->config.pin_led), 0);
+  }
+  printf("[ILI9341] Sleep mode enabled (backlight saved: %u)\n", dev->backlight_level);
+}
+
+void ili9341_wakeup(ili9341_t *dev) {
+  write_cmd(dev, ILI9341_SLPOUT);
+  sleep_ms(120); // Sleep Out requires 120ms delay
+  // Restore saved backlight level
+  if (dev->config.pin_led != 255 && dev->backlight_level > 0) {
+    uint32_t slice = pwm_gpio_to_slice_num(dev->config.pin_led);
+    pwm_set_chan_level(slice, pwm_gpio_to_channel(dev->config.pin_led), dev->backlight_level);
+  }
+  printf("[ILI9341] Wakeup complete (backlight restored: %u)\n", dev->backlight_level);
+}
+
+void ili9341_display_off(ili9341_t *dev) {
+  write_cmd(dev, ILI9341_DISPOFF);
+  // Turn off backlight to prevent white screen
+  if (dev->config.pin_led != 255) {
+    uint32_t slice = pwm_gpio_to_slice_num(dev->config.pin_led);
+    // Turn off backlight (level already saved in backlight_level)
+    pwm_set_chan_level(slice, pwm_gpio_to_channel(dev->config.pin_led), 0);
+  }
+  printf("[ILI9341] Display OFF (backlight saved: %u)\n", dev->backlight_level);
+}
+
+void ili9341_display_on(ili9341_t *dev) {
+  write_cmd(dev, ILI9341_DISPON);
+  // Restore saved backlight level
+  if (dev->config.pin_led != 255 && dev->backlight_level > 0) {
+    uint32_t slice = pwm_gpio_to_slice_num(dev->config.pin_led);
+    pwm_set_chan_level(slice, pwm_gpio_to_channel(dev->config.pin_led), dev->backlight_level);
+  }
+  printf("[ILI9341] Display ON (backlight restored: %u)\n", dev->backlight_level);
+}
+
+void ili9341_set_idle_mode(ili9341_t *dev, bool enable) {
+  if (enable) {
+    write_cmd(dev, ILI9341_IDMON);
+    printf("[ILI9341] Idle mode enabled (8-color)\n");
+  } else {
+    write_cmd(dev, ILI9341_IDMOFF);
+    printf("[ILI9341] Idle mode disabled (65K-color)\n");
   }
 }

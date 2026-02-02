@@ -85,6 +85,7 @@ typedef struct {
   ili9341_orientation_t orientation; // Current display orientation
   uint16_t width;                    // Current width based on orientation
   uint16_t height;                   // Current height based on orientation
+  uint8_t backlight_level;           // Saved backlight level for display_on/off
 } ili9341_t;
 
 /**
@@ -263,5 +264,42 @@ void ili9341_draw_pixel(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t color);
  */
 void ili9341_draw_line(ili9341_t *dev, uint16_t x0, uint16_t y0, uint16_t x1,
                        uint16_t y1, uint16_t color);
+
+/**
+ * @brief Enter sleep mode (low power, display content retained)
+ * @param dev Device context
+ * @note Reduces power consumption. Display content is retained in memory.
+ *       Use ili9341_wakeup() to exit sleep mode.
+ */
+void ili9341_sleep(ili9341_t *dev);
+
+/**
+ * @brief Exit sleep mode and restore display
+ * @param dev Device context
+ * @note Takes 120ms to complete. Display automatically turns on.
+ */
+void ili9341_wakeup(ili9341_t *dev);
+
+/**
+ * @brief Turn off display output (display goes blank)
+ * @param dev Device context
+ * @note Display content is retained in memory. Less power saving than sleep.
+ */
+void ili9341_display_off(ili9341_t *dev);
+
+/**
+ * @brief Turn on display output
+ * @param dev Device context
+ */
+void ili9341_display_on(ili9341_t *dev);
+
+/**
+ * @brief Enable/disable idle mode (reduced color depth for power saving)
+ * @param dev Device context
+ * @param enable true to enable idle mode (8-color), false for normal (65K-color)
+ * @note Idle mode reduces color depth to save power while keeping display active.
+ *       Useful for low-power applications where full color is not needed.
+ */
+void ili9341_set_idle_mode(ili9341_t *dev, bool enable);
 
 #endif // ILI9341_H
