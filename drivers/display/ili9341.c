@@ -115,8 +115,7 @@ static void ili9341_set_window(ili9341_t *dev, uint16_t x0, uint16_t y0,
   uint8_t ramwr_cmd = ILI9341_RAMWR;
   spi_write_blocking(dev->config.spi, &ramwr_cmd, 1);
 
-  CS_HIGH();
-  // Note: Next operation should set DC_DATA and CS_LOW before sending pixels
+  // Note: CS stays LOW for continuous transaction - caller handles CS_HIGH
 }
 
 // DMA IRQ handler for automatic completion signaling
@@ -404,7 +403,7 @@ void ili9341_fill_rect(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
   if (pixel_count == 0)
     return;
 
-  // Set window once
+  // Set window once (CS already LOW from set_window)
   ili9341_set_window(dev, x, y, x + w - 1, y + h - 1);
 
   // Prepare swapped color for ILI9341 (big-endian)
@@ -417,7 +416,7 @@ void ili9341_fill_rect(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
     buffer[i] = swapped_color;
   }
 
-  CS_LOW();
+  // CS already LOW, just set data mode
   DC_DATA();
 
   // Send in chunks
@@ -478,7 +477,7 @@ bool ili9341_fill_rect_async(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
   g_dma_fill_color_bytes[0] = (uint8_t)(swapped_color & 0xFF);
   g_dma_fill_color_bytes[1] = (uint8_t)(swapped_color >> 8);
 
-  // Set window
+  // Set window (CS already LOW from set_window)
   ili9341_set_window(dev, x, y, x + w - 1, y + h - 1);
 
   // Mark DMA as busy
@@ -495,7 +494,7 @@ bool ili9341_fill_rect_async(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
   channel_config_set_write_increment(&c, false);
   channel_config_set_ring(&c, false, 1); // Ring on read, size=2^1=2 bytes
 
-  CS_LOW();
+  // CS already LOW, just set data mode
   DC_DATA();
 
   // Clear any stale interrupt flag before starting
@@ -524,13 +523,13 @@ void ili9341_draw_pixel(ili9341_t *dev, uint16_t x, uint16_t y,
     return; // Out of bounds
   }
 
-  // Set window to single pixel
+  // Set window to single pixel (CS already LOW from set_window)
   ili9341_set_window(dev, x, y, x, y);
 
   // Swap bytes for ILI9341
   uint16_t swapped_color = (color >> 8) | (color << 8);
 
-  CS_LOW();
+  // CS already LOW, just set data mode
   DC_DATA();
   spi_write_blocking(dev->config.spi, (const uint8_t *)&swapped_color, 2);
   CS_HIGH();
