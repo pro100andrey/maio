@@ -126,6 +126,16 @@ bool ili9341_dma_is_idle(ili9341_t *dev);
 int ili9341_get_dma_channel(ili9341_t *dev);
 
 /**
+ * @brief Send pixel data with automatic DMA/blocking selection
+ * @param dev Device context
+ * @param buffer Pixel buffer (RGB565 format)
+ * @param pixels Number of pixels to send
+ * @note Automatically chooses blocking for small transfers (< 2KB) or when DMA
+ * busy, otherwise uses DMA. Manages CS internally.
+ */
+void ili9341_send_pixels(ili9341_t *dev, const uint16_t *buffer, size_t pixels);
+
+/**
  * @brief Set pixel transfer mode (8-bit or 16-bit SPI)
  * @param dev Device context
  * @param use_16bit true for 16-bit mode, false for 8-bit mode
