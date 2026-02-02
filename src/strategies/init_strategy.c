@@ -9,7 +9,7 @@
 #include "../core/event_manager.h"
 #include "../managers/display_manager.h"
 #include "../managers/encoder_manager.h"
-#include "idle_strategy.h"
+#include "ui_strategy.h"
 #include <stdio.h>
 
 /** ILI9341 device instance */
@@ -62,15 +62,18 @@ static void init_on_event(const event_t *event) {
       // Store device reference in manager
       display_manager_init(&ili_device);
 
+      // Set orientation BEFORE LVGL init (affects display dimensions)
+      ili9341_set_orientation(&ili_device, ILI9341_LANDSCAPE);
+
       // Turn on backlight
       ili9341_set_backlight(&ili_device, 255);
       printf("[Init] Backlight ON\n");
 
-      // Set default orientation to landscape
-      ili9341_set_orientation(&ili_device, ILI9341_LANDSCAPE);
+      // Initialize LVGL integration (will read correct dimensions)
+      display_manager_init_lvgl();
 
-      printf("[Init] Switching to Idle mode...\n");
-      strategy_switch(&idle_strategy);
+      printf("[Init] Switching to UI mode...\n");
+      strategy_switch(&ui_strategy);
     }
   }
 }

@@ -174,7 +174,7 @@
      * - bitmaps with transparency may use ARGB8888
      */
     #define LV_DRAW_SW_SUPPORT_RGB565       1
-    #define LV_DRAW_SW_SUPPORT_RGB565_SWAPPED       0
+    #define LV_DRAW_SW_SUPPORT_RGB565_SWAPPED       1
     #define LV_DRAW_SW_SUPPORT_RGB565A8     0
     #define LV_DRAW_SW_SUPPORT_RGB888       0
     #define LV_DRAW_SW_SUPPORT_XRGB8888     0
@@ -613,7 +613,7 @@
 #define LV_FONT_MONTSERRAT_22 0
 #define LV_FONT_MONTSERRAT_24 0
 #define LV_FONT_MONTSERRAT_26 0
-#define LV_FONT_MONTSERRAT_28 0
+#define LV_FONT_MONTSERRAT_28 1
 #define LV_FONT_MONTSERRAT_30 0
 #define LV_FONT_MONTSERRAT_32 0
 #define LV_FONT_MONTSERRAT_34 0

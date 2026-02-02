@@ -3,6 +3,7 @@
 #include "core/strategy.h"
 #include "shared/events.h"
 #include "strategies/init_strategy.h"
+#include <lvgl/lvgl.h>
 #include <pico/stdio.h>
 #include <pico/time.h>
 #include <stdio.h>
@@ -15,6 +16,9 @@
  */
 static bool timer_callback(struct repeating_timer *t) {
   (void)t;
+
+  // Update LVGL tick (needed for animations and timers)
+  lv_tick_inc(SYSTEM_TICK_MS);
 
   // Post system tick event for application logic
   event_t ev = {.type = EV_TIMER_TICK, .payload = 0};

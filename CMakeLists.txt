@@ -58,8 +58,15 @@ add_executable(maio
     src/strategies/idle_strategy.c
     src/strategies/test_strategy.c
     src/strategies/init_strategy.c
+    src/strategies/ui_strategy.c
     src/managers/encoder_manager.c
     src/managers/display_manager.c
+    src/managers/screen_manager.c
+    src/screens/screen_1.c
+    src/screens/screen_2.c
+    src/screens/screen_3.c
+    src/screens/screen_4.c
+    src/screens/screen_settings.c
     drivers/encoder/encoder.c
     drivers/display/ili9341.c
 )
