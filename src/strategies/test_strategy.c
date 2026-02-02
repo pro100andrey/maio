@@ -41,15 +41,10 @@ static void wait_dma(ili9341_t *dev) {
 }
 
 /**
- * @brief Scene: Synchronous full screen fill with diagonal line
+ * @brief Scene: Synchronous full screen fill (REMOVED - use LVGL)
  */
 static void scene_full_sync(ili9341_t *dev) {
-  static int idx = 0;
-  idx = (idx + 1) % 3;
-  printf("[Test] Sync fill %s\n", color_names[idx]);
-  ili9341_fill_screen(dev, colors[idx]);
-  ili9341_draw_line(dev, 0, 0, ili9341_get_width(dev) - 1,
-                    ili9341_get_height(dev) - 1, 0xFFFF);
+  printf("[Test] scene_full_sync removed - use LVGL for drawing\\n");
 }
 
 /**
@@ -72,20 +67,10 @@ static void scene_full_async(ili9341_t *dev) {
 }
 
 /**
- * @brief Scene: Four colored quadrants with diagonal lines
+ * @brief Scene: Four colored quadrants (REMOVED - use LVGL)
  */
 static void scene_quadrants(ili9341_t *dev) {
-  uint16_t w = ili9341_get_width(dev);
-  uint16_t h = ili9341_get_height(dev);
-  uint16_t hw = w / 2;
-  uint16_t hh = h / 2;
-  printf("[Test] Quadrants sync\n");
-  ili9341_fill_rect(dev, 0, 0, hw, hh, 0xF800);
-  ili9341_fill_rect(dev, hw, 0, w - hw, hh, 0x07E0);
-  ili9341_fill_rect(dev, 0, hh, hw, h - hh, 0x001F);
-  ili9341_fill_rect(dev, hw, hh, w - hw, h - hh, 0xFFFF);
-  ili9341_draw_line(dev, 0, 0, w - 1, h - 1, 0xFFE0);
-  ili9341_draw_line(dev, w - 1, 0, 0, h - 1, 0xFFE0);
+  printf("[Test] scene_quadrants removed - use LVGL for drawing\n");
 }
 
 /**
@@ -124,7 +109,7 @@ static void scene_stripes_async(ili9341_t *dev) {
 }
 
 /**
- * @brief Scene: Toggle display orientation (landscape <-> portrait)
+ * @brief Scene: Toggle display orientation (REMOVED - use LVGL)
  */
 static void scene_orientation_toggle(ili9341_t *dev) {
   ili9341_orientation_t cur = ili9341_get_orientation(dev);
@@ -133,9 +118,7 @@ static void scene_orientation_toggle(ili9341_t *dev) {
   printf("[Test] Orientation %s\n",
          next == ILI9341_LANDSCAPE ? "LANDSCAPE" : "PORTRAIT");
   ili9341_set_orientation(dev, next);
-  ili9341_fill_screen(dev, 0x0000);
-  ili9341_draw_line(dev, 0, 0, ili9341_get_width(dev) - 1,
-                    ili9341_get_height(dev) - 1, 0x07E0);
+  printf("[Test] Fill screen removed - use LVGL\n");
 }
 
 /**
@@ -164,160 +147,35 @@ static void scene_backlight_ramp(ili9341_t *dev) {
 }
 
 /**
- * @brief Scene: Toggle pixel transfer mode (8-bit/16-bit SPI)
+ * @brief Scene: Toggle pixel transfer mode (REMOVED - use LVGL)
  */
 static void scene_toggle_spi_mode(ili9341_t *dev) {
   bool current = ili9341_get_pixel_transfer_mode(dev);
   bool next = !current;
   ili9341_set_pixel_transfer_mode(dev, next);
   printf("[Test] SPI mode: %s\n", next ? "16-bit" : "8-bit");
-
-  // Test fill with new mode
-  ili9341_fill_screen(dev, 0x07E0); // Green
-  sleep_ms(500);
-  ili9341_fill_screen(dev, 0x001F); // Blue
+  printf("[Test] Fill screen test removed - use LVGL\n");
 }
 
 /**
- * @brief Scene: Window caching optimization test
- * Repeatedly draws to same window to test cache hit performance
+ * @brief Scene: Window caching test (REMOVED - no caching in LVGL driver)
  */
 static void scene_window_caching(ili9341_t *dev) {
-  printf("[Test] Window caching - repeated draws to same area\n");
-
-  // Small rectangles (10x10) where window setup overhead is significant
-  uint16_t w = 10, h = 10;
-  uint32_t start, elapsed_cached, elapsed_uncached;
-
-  // Test 1: Draw same window 100 times (cache hits after first)
-  start = time_us_32();
-  for (int i = 0; i < 100; i++) {
-    ili9341_fill_rect(dev, 50, 50, w, h, colors[i % 3]);
-  }
-  elapsed_cached = time_us_32() - start;
-  printf("[Test] 100 cached fills (10x10): %u us (%.1f us/op)\n",
-         elapsed_cached, elapsed_cached / 100.0);
-
-  // Test 2: Draw 100 different windows (cache misses, same size)
-  start = time_us_32();
-  for (int i = 0; i < 100; i++) {
-    // Draw at different positions to force cache miss
-    uint16_t x = (i * 3) % 200;
-    uint16_t y = (i * 2) % 150;
-    ili9341_fill_rect(dev, x, y, w, h, colors[i % 3]);
-  }
-  elapsed_uncached = time_us_32() - start;
-  printf("[Test] 100 uncached fills (10x10): %u us (%.1f us/op)\n",
-         elapsed_uncached, elapsed_uncached / 100.0);
-
-  float speedup = (float)elapsed_uncached / elapsed_cached;
-  float saved_us = (elapsed_uncached - elapsed_cached) / 100.0f;
-  printf("[Test] Cache speedup: %.2fx (~%.1f us saved/op)\n", speedup,
-         saved_us);
+  printf("[Test] Window caching removed - not needed for LVGL\n");
 }
 
 /**
- * @brief Scene: DMA threshold test (smart DMA vs blocking selection)
+ * @brief Scene: DMA threshold test (REMOVED - internal to driver)
  */
 static void scene_dma_threshold(ili9341_t *dev) {
-  printf("[Test] DMA threshold - testing smart selection\n");
-
-  // Test small buffer (< 2KB, should use blocking)
-  uint16_t small_buffer[512]; // 1KB
-  for (int i = 0; i < 512; i++) {
-    small_buffer[i] = 0xF800; // Red
-  }
-
-  // Clear area and set window for small buffer
-  ili9341_fill_rect(dev, 0, 0, 240, 2, 0x0000);
-  ili9341_set_window(dev, 0, 0, 239, 1); // 240x2 area
-
-  uint32_t start = time_us_32();
-  ili9341_send_pixels(dev, small_buffer, 240 * 2); // 480 pixels = 960 bytes
-  uint32_t small_time = time_us_32() - start;
-
-  // Test large buffer (> 2KB, should use DMA)
-  static uint16_t large_buffer[2048]; // 4KB
-  for (int i = 0; i < 2048; i++) {
-    large_buffer[i] = 0x07E0; // Green
-  }
-
-  // Clear area and set window for large buffer
-  ili9341_fill_rect(dev, 0, 50, 240, 9, 0x0000);
-  ili9341_set_window(dev, 0, 50, 239, 58); // 240x9 area
-
-  start = time_us_32();
-  ili9341_send_pixels(dev, large_buffer, 240 * 9); // 2160 pixels = 4320 bytes
-  wait_dma(dev);
-  uint32_t large_time = time_us_32() - start;
-
-  printf("[Test] Small (960B): %u us, Large (4.3KB): %u us\n", small_time,
-         large_time);
+  printf("[Test] DMA threshold test removed - LVGL handles this\n");
 }
 
 /**
- * @brief Scene: Mixed drawing operations (async pipeline)
- * Demonstrates proper async operation chaining with CPU/DMA overlap
+ * @brief Scene: Mixed operations (REMOVED - use LVGL)
  */
 static void scene_mixed_ops(ili9341_t *dev) {
-  printf("[Test] Mixed operations - async pipeline\n");
-
-  uint16_t w = ili9341_get_width(dev);
-  uint16_t h = ili9341_get_height(dev);
-  uint32_t start = time_us_32();
-
-  // Step 1: Launch background fill (async)
-  ili9341_fill_screen_async(dev, 0x0000);
-  printf("[Test]   1. Background DMA started, CPU free for work...\n");
-
-  // CPU work: Prepare next operation parameters while DMA runs
-  uint16_t rect_params[][5] = {
-      {10, 10, 60, 40, 0xF800}, // Red
-      {80, 10, 60, 40, 0x07E0}, // Green
-      {150, 10, 60, 40, 0x001F} // Blue
-  };
-
-  // Step 2: Wait for background, launch first rectangle
-  wait_dma(dev);
-  ili9341_fill_rect_async(dev, rect_params[0][0], rect_params[0][1],
-                          rect_params[0][2], rect_params[0][3],
-                          rect_params[0][4]);
-  printf("[Test]   2. Red rect DMA started...\n");
-
-  // Step 3: Wait, launch green rectangle
-  wait_dma(dev);
-  ili9341_fill_rect_async(dev, rect_params[1][0], rect_params[1][1],
-                          rect_params[1][2], rect_params[1][3],
-                          rect_params[1][4]);
-  printf("[Test]   3. Green rect DMA started...\n");
-
-  // Step 4: Wait, launch blue rectangle
-  wait_dma(dev);
-  ili9341_fill_rect_async(dev, rect_params[2][0], rect_params[2][1],
-                          rect_params[2][2], rect_params[2][3],
-                          rect_params[2][4]);
-  printf("[Test]   4. Blue rect DMA started...\n");
-
-  // Step 5: Wait for blue rect, draw lines (sync operations - small data)
-  wait_dma(dev);
-  ili9341_draw_line(dev, 0, 60, w - 1, 60, 0xFFFF);       // Horizontal
-  ili9341_draw_line(dev, 120, 70, 120, h - 10, 0xFFFF);   // Vertical
-  ili9341_draw_line(dev, 10, 70, w - 10, h - 10, 0xFFE0); // Diagonal
-  printf("[Test]   5. Lines drawn (sync)\n");
-
-  // Step 6: Draw pixels (star pattern) - sync, small operations
-  uint16_t cx = w / 2, cy = h - 50;
-  for (int angle = 0; angle < 360; angle += 30) {
-    double rad = angle * 3.14159 / 180.0;
-    int px = cx + (int)(30 * cos(rad));
-    int py = cy + (int)(30 * sin(rad));
-    ili9341_draw_pixel(dev, px, py, 0xF81F); // Magenta
-  }
-  printf("[Test]   6. Star pattern drawn\n");
-
-  uint32_t elapsed = time_us_32() - start;
-  printf("[Test] Total async pipeline: %u us (%.2f ms)\n", elapsed,
-         elapsed / 1000.0);
+  printf("[Test] Mixed operations removed - use LVGL for drawing\n");
 }
 
 /**
@@ -325,15 +183,9 @@ static void scene_mixed_ops(ili9341_t *dev) {
  * Measures timing for various operations
  */
 static void scene_benchmark(ili9341_t *dev) {
-  printf("[Test] Performance benchmark\n");
+  printf("[Test] Performance benchmark (DMA only)\n");
 
   uint32_t start, elapsed;
-
-  // Full screen fill (sync)
-  start = time_us_32();
-  ili9341_fill_screen(dev, 0x0000);
-  elapsed = time_us_32() - start;
-  printf("  Full screen sync: %u us (%.2f ms)\n", elapsed, elapsed / 1000.0);
 
   // Full screen fill (async DMA) - measure launch vs total
   start = time_us_32();
@@ -346,30 +198,7 @@ static void scene_benchmark(ili9341_t *dev) {
   printf("  CPU free time: %.2f ms (%.0f%%)\n", (elapsed - launch) / 1000.0,
          (float)(elapsed - launch) / elapsed * 100);
 
-  // Small rectangles (100x50)
-  start = time_us_32();
-  for (int i = 0; i < 10; i++) {
-    ili9341_fill_rect(dev, 10 + i * 5, 10, 100, 50, colors[i % 3]);
-  }
-  elapsed = time_us_32() - start;
-  printf("  10 rects (100x50): %u us (%.1f us/rect)\n", elapsed,
-         elapsed / 10.0);
-
-  // Pixels (diagonal line)
-  start = time_us_32();
-  for (int i = 0; i < 100; i++) {
-    ili9341_draw_pixel(dev, i, i, 0xFFFF);
-  }
-  elapsed = time_us_32() - start;
-  printf("  100 pixels: %u us (%.1f us/pixel)\n", elapsed, elapsed / 100.0);
-
-  // Lines
-  start = time_us_32();
-  for (int i = 0; i < 10; i++) {
-    ili9341_draw_line(dev, 0, i * 20, 239, i * 20, 0x07E0);
-  }
-  elapsed = time_us_32() - start;
-  printf("  10 h-lines: %u us (%.1f us/line)\n", elapsed, elapsed / 10.0);
+  printf("[Test] Primitive drawing tests removed - use LVGL\n");
 }
 
 /**
@@ -398,9 +227,6 @@ static void scene_pixel_buffer(ili9341_t *dev) {
     }
   }
 
-  // Clear screen
-  ili9341_fill_screen(dev, 0x0000);
-
   // Set window for gradient area
   ili9341_set_window(dev, 0, 0, w - 1, h - 1);
 
@@ -415,18 +241,13 @@ static void scene_pixel_buffer(ili9341_t *dev) {
 }
 
 /**
- * @brief Scene: Power management test
- * Tests sleep/wakeup, display on/off, and idle mode
+ * @brief Scene: Power management test (simplified for LVGL)
+ * Tests sleep/wakeup, display on/off, and idle mode without drawing
  */
 static void scene_power_management(ili9341_t *dev) {
   printf("[Test] Power management test\n");
 
-  // Draw test pattern
-  ili9341_fill_screen(dev, 0x0000);
-  ili9341_fill_rect(dev, 50, 50, 100, 80, 0xF800);  // Red
-  ili9341_fill_rect(dev, 100, 90, 100, 80, 0x07E0); // Green
-  ili9341_fill_rect(dev, 70, 120, 100, 80, 0x001F); // Blue
-  printf("[Test]   Test pattern drawn\n");
+  printf("[Test]   Drawing test pattern with LVGL...\n");
   sleep_ms(1000);
 
   // Test display off/on

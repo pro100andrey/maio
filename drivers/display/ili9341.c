@@ -54,11 +54,6 @@
 // DMA overhead threshold: use blocking for small transfers
 #define DMA_THRESHOLD_BYTES 2048
 
-// Window caching for performance optimization
-static uint16_t g_window_x0 = 0xFFFF, g_window_y0 = 0xFFFF;
-static uint16_t g_window_x1 = 0, g_window_y1 = 0;
-static bool g_window_valid = false;
-
 /**
  * @brief Write command byte
  */
@@ -128,53 +123,14 @@ static void ili9341_set_window_open(ili9341_t *dev, uint16_t x0, uint16_t y0,
 }
 
 /**
- * @brief Close window transaction (raise CS)
- * @note Invalidates window cache since CS HIGH resets display's internal window
- */
-static inline void ili9341_window_close(ili9341_t *dev) {
-  CS_HIGH();
-  g_window_valid = false; // Display forgets window when CS goes high
-}
-
-/**
- * @brief Set address window with caching (optimized for repeated operations)
- * @note If window coordinates match cached values, only sends RAMWR command.
- *       This saves ~20μs per operation when drawing multiple objects in same
- * window.
- */
-static void ili9341_set_window_cached(ili9341_t *dev, uint16_t x0, uint16_t y0,
-                                      uint16_t x1, uint16_t y1) {
-  if (g_window_valid && x0 == g_window_x0 && y0 == g_window_y0 &&
-      x1 == g_window_x1 && y1 == g_window_y1) {
-    // Window unchanged, fast path: just reopen CS and send RAMWR
-    CS_LOW();
-    sleep_us(2);
-    DC_CMD();
-    uint8_t cmd = ILI9341_RAMWR;
-    spi_write_blocking(dev->config.spi, &cmd, 1);
-    DC_DATA();
-    sleep_us(1);
-    return;
-  }
-
-  // Full window setup (coordinates changed or first call)
-  ili9341_set_window_open(dev, x0, y0, x1, y1);
-
-  // Update cache
-  g_window_x0 = x0;
-  g_window_y0 = y0;
-  g_window_x1 = x1;
-  g_window_y1 = y1;
-  g_window_valid = true;
-}
-
-/**
- * @brief Public API: Set drawing window (with caching and proper close)
+ * @brief Public API: Set drawing window for LVGL flush
+ * @note Leaves CS LOW for subsequent pixel data transfer
+ *       LVGL will call send_pixels() which manages CS internally
  */
 void ili9341_set_window(ili9341_t *dev, uint16_t x0, uint16_t y0, uint16_t x1,
                         uint16_t y1) {
-  ili9341_set_window_cached(dev, x0, y0, x1, y1);
-  ili9341_window_close(dev);
+  ili9341_set_window_open(dev, x0, y0, x1, y1);
+  CS_HIGH(); // Close window after setup
 }
 
 // DMA IRQ handler for automatic completion signaling
@@ -543,59 +499,6 @@ bool ili9341_get_pixel_transfer_mode(ili9341_t *dev) {
   return dev->config.use_16bit_pixel_transfer;
 }
 
-// Fast rectangle fill with single window setup
-void ili9341_fill_rect(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
-                       uint16_t h, uint16_t color) {
-  if (x >= dev->width || y >= dev->height)
-    return;
-  if (x + w > dev->width)
-    w = dev->width - x;
-  if (y + h > dev->height)
-    h = dev->height - y;
-  if (!w || !h)
-    return;
-
-  uint32_t pixels = (uint32_t)w * h;
-
-  ili9341_set_window_cached(dev, x, y, x + w - 1, y + h - 1);
-
-#define FAST_CHUNK 512
-  static uint16_t buf[FAST_CHUNK];
-
-  // Switch to appropriate SPI mode for pixel transfer
-  if (dev->config.use_16bit_pixel_transfer) {
-    // 16-bit mode: no swap needed (SPI MSB_FIRST handles byte order)
-    for (int i = 0; i < FAST_CHUNK; i++)
-      buf[i] = color;
-
-    spi_set_format(dev->config.spi, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-    while (pixels) {
-      uint32_t chunk = pixels > FAST_CHUNK ? FAST_CHUNK : pixels;
-      spi_write16_blocking(dev->config.spi, buf, chunk);
-      pixels -= chunk;
-    }
-    spi_set_format(dev->config.spi, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-  } else {
-    // 8-bit mode: need byte swap
-    uint16_t swapped = __builtin_bswap16(color);
-    for (int i = 0; i < FAST_CHUNK; i++)
-      buf[i] = swapped;
-
-    while (pixels) {
-      uint32_t chunk = pixels > FAST_CHUNK ? FAST_CHUNK : pixels;
-      spi_write_blocking(dev->config.spi, (uint8_t *)buf, chunk * 2);
-      pixels -= chunk;
-    }
-  }
-
-  ili9341_window_close(dev);
-}
-
-void ili9341_fill_screen(ili9341_t *dev, uint16_t color) {
-  // Use optimized fill_rect instead of manual loop
-  ili9341_fill_rect(dev, 0, 0, dev->width, dev->height, color);
-}
-
 /**
  * @brief Fill rectangle using DMA with ring buffer (non-blocking, optimized)
  *
@@ -631,7 +534,8 @@ bool ili9341_fill_rect_async(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
 
   uint32_t pixels = (uint32_t)w * h;
 
-  ili9341_set_window_cached(dev, x, y, x + w - 1, y + h - 1);
+  ili9341_set_window_open(dev, x, y, x + w - 1, y + h - 1);
+  CS_HIGH(); // Close window
 
   dev->dma_busy = true;
 
@@ -688,70 +592,6 @@ bool ili9341_fill_rect_async(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
  */
 bool ili9341_fill_screen_async(ili9341_t *dev, uint16_t color) {
   return ili9341_fill_rect_async(dev, 0, 0, dev->width, dev->height, color);
-}
-
-void ili9341_draw_pixel(ili9341_t *dev, uint16_t x, uint16_t y,
-                        uint16_t color) {
-  if (x >= dev->width || y >= dev->height)
-    return;
-
-  ili9341_set_window_cached(dev, x, y, x, y);
-
-  if (dev->config.use_16bit_pixel_transfer) {
-    // 16-bit mode: no swap needed (SPI MSB_FIRST handles byte order)
-    spi_set_format(dev->config.spi, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-    spi_write16_blocking(dev->config.spi, &color, 1);
-    spi_set_format(dev->config.spi, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-  } else {
-    // 8-bit mode: need byte swap
-    uint16_t swapped = __builtin_bswap16(color);
-    spi_write_blocking(dev->config.spi, (uint8_t *)&swapped, 2);
-  }
-
-  ili9341_window_close(dev);
-}
-
-void ili9341_draw_line(ili9341_t *dev, uint16_t x0, uint16_t y0, uint16_t x1,
-                       uint16_t y1, uint16_t color) {
-  // Fast path: vertical line
-  if (x0 == x1) {
-    uint16_t y = y0 < y1 ? y0 : y1;
-    ili9341_fill_rect(dev, x0, y, 1, abs(y1 - y0) + 1, color);
-    return;
-  }
-
-  // Fast path: horizontal line
-  if (y0 == y1) {
-    uint16_t x = x0 < x1 ? x0 : x1;
-    ili9341_fill_rect(dev, x, y0, abs(x1 - x0) + 1, 1, color);
-    return;
-  }
-
-  // Diagonal: use Bresenham pixel-by-pixel
-  int dx = abs((int)x1 - x0);
-  int dy = abs((int)y1 - y0);
-  int sx = x0 < x1 ? 1 : -1;
-  int sy = y0 < y1 ? 1 : -1;
-  int err = dx - dy;
-
-  while (true) {
-    ili9341_draw_pixel(dev, x0, y0, color);
-
-    if (x0 == x1 && y0 == y1)
-      break;
-
-    int e2 = err * 2;
-
-    if (e2 >= -dy) {
-      err -= dy;
-      x0 += sx;
-    }
-
-    if (e2 <= dx) {
-      err += dx;
-      y0 += sy;
-    }
-  }
 }
 
 // Power Management Functions

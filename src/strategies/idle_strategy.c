@@ -19,17 +19,15 @@ static void idle_on_enter(void) {
   printf("[Idle] Mode activated\n");
   printf("[Idle] Press button to enter test mode\n");
 
-  // Display simple idle screen
+  // Display simple idle screen (primitives removed - use LVGL for drawing)
   ili9341_t *dev = display_manager_get_device();
   if (dev) {
-    ili9341_fill_screen(dev, 0x0000); // Black background
-    // Draw simple border
-    uint16_t w = ili9341_get_width(dev);
-    uint16_t h = ili9341_get_height(dev);
-    ili9341_draw_line(dev, 0, 0, w - 1, 0, 0xFFFF);
-    ili9341_draw_line(dev, w - 1, 0, w - 1, h - 1, 0xFFFF);
-    ili9341_draw_line(dev, w - 1, h - 1, 0, h - 1, 0xFFFF);
-    ili9341_draw_line(dev, 0, h - 1, 0, 0, 0xFFFF);
+    // Clear screen using async fill
+    ili9341_fill_screen_async(dev, 0x0000);
+    while (!ili9341_dma_is_idle(dev)) {
+      tight_loop_contents();
+    }
+    printf("[Idle] Screen cleared (border drawing removed - use LVGL)\n");
   }
 
   encoder_position = 0;
