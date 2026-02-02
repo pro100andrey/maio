@@ -64,7 +64,7 @@ typedef enum tft_pins_e {
 } tft_pins_t;
 
 #define TFT_SPI_INST spi0
-#define TFT_BAUDRATE (40 * 1000 * 1000) // 40 MHz - safe for most ILI9341
+#define TFT_BAUDRATE (62 * 1000 * 1000) // 62 MHz - safe for most ILI9341
 #define TFT_USE_16BIT_PIXEL_TRANSFER                                           \
   false // false=8-bit (compatible), true=16-bit (faster DMA)
 

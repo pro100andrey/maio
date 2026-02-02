@@ -27,7 +27,7 @@ int main(void) {
   // Initialize stdio for printf
   stdio_init_all();
 
-  // Initialize event system
+  // Initialize e5vent system
   event_manager_init();
 
   // Set initial strategy to init (will handle all hardware initialization)

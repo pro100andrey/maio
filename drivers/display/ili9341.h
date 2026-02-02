@@ -136,6 +136,19 @@ int ili9341_get_dma_channel(ili9341_t *dev);
 void ili9341_send_pixels(ili9341_t *dev, const uint16_t *buffer, size_t pixels);
 
 /**
+ * @brief Set drawing window for subsequent pixel operations
+ * @param dev Device context
+ * @param x0 Start X coordinate
+ * @param y0 Start Y coordinate
+ * @param x1 End X coordinate (inclusive)
+ * @param y1 End Y coordinate (inclusive)
+ * @note Use before ili9341_send_pixels() for custom buffer drawing.
+ *       Window is cached for performance optimization.
+ */
+void ili9341_set_window(ili9341_t *dev, uint16_t x0, uint16_t y0, uint16_t x1,
+                        uint16_t y1);
+
+/**
  * @brief Set pixel transfer mode (8-bit or 16-bit SPI)
  * @param dev Device context
  * @param use_16bit true for 16-bit mode, false for 8-bit mode

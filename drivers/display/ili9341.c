@@ -4,6 +4,7 @@
  */
 
 #include "ili9341.h"
+#include <hardware/clocks.h>
 #include <hardware/gpio.h>
 #include <hardware/irq.h>
 #include <hardware/pwm.h>
@@ -130,7 +131,8 @@ static inline void ili9341_window_close(ili9341_t *dev) { CS_HIGH(); }
 /**
  * @brief Set address window with caching (optimized for repeated operations)
  * @note If window coordinates match cached values, only sends RAMWR command.
- *       This saves ~20μs per operation when drawing multiple objects in same window.
+ *       This saves ~20μs per operation when drawing multiple objects in same
+ * window.
  */
 static void ili9341_set_window_cached(ili9341_t *dev, uint16_t x0, uint16_t y0,
                                       uint16_t x1, uint16_t y1) {
@@ -156,6 +158,15 @@ static void ili9341_set_window_cached(ili9341_t *dev, uint16_t x0, uint16_t y0,
   g_window_x1 = x1;
   g_window_y1 = y1;
   g_window_valid = true;
+}
+
+/**
+ * @brief Public API: Set drawing window (with caching and proper close)
+ */
+void ili9341_set_window(ili9341_t *dev, uint16_t x0, uint16_t y0, uint16_t x1,
+                        uint16_t y1) {
+  ili9341_set_window_cached(dev, x0, y0, x1, y1);
+  ili9341_window_close(dev);
 }
 
 // DMA IRQ handler for automatic completion signaling
@@ -218,8 +229,31 @@ void ili9341_init(ili9341_t *dev, const ili9341_config_t *config) {
   gpio_set_function(dev->config.pin_sck, GPIO_FUNC_SPI);
   gpio_set_function(dev->config.pin_mosi, GPIO_FUNC_SPI);
 
+  // Clock diagnostics
+  uint32_t peri_clk = clock_get_hz(clk_peri);
+  uint32_t sys_clk = clock_get_hz(clk_sys);
+  printf("[Clock] sys_clk=%u Hz, peri_clk=%u Hz\n", sys_clk, peri_clk);
+
   printf("[ILI9341] SPI configured: requested=%u Hz, actual=%u Hz\n",
          dev->config.spi_baudrate, actual_baudrate);
+
+  // Force maximum SPI speed: baudrate = peri_clk / (CPSR × (1 + SCR))
+  // For max speed: CPSR=2 (min), SCR=0 (min) → baudrate = peri_clk / 2
+  spi_hw_t *spi_hw = spi_get_hw(dev->config.spi);
+
+  // Set CPSR (Clock Prescale Register) to minimum (2)
+  spi_hw->cpsr = 2;
+
+  // Set SCR (Serial Clock Rate) to 0 in CR0 register (bits 15:8)
+  // Preserve other bits (DSS, FRF, SPO, SPH) by masking
+  uint32_t cr0 = spi_hw->cr0;
+  cr0 &= ~(0xFF << 8); // Clear SCR bits (15:8)
+  cr0 |= (0 << 8);     // Set SCR = 0
+  spi_hw->cr0 = cr0;
+
+  uint32_t max_actual = spi_get_baudrate(dev->config.spi);
+  printf("[ILI9341] Maximum SPI: CPSR=2, SCR=0, actual=%u Hz (%.1f MHz)\n",
+         max_actual, max_actual / 1000000.0);
 
   // Initialize backlight (PWM)
   if (dev->config.pin_led != 255) {
@@ -354,10 +388,6 @@ bool ili9341_send_pixels_dma(ili9341_t *dev, const uint16_t *buffer,
 
   // Configure DMA transfer
   dma_channel_config c = dma_channel_get_default_config(dev->dma_channel);
-  channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
-  channel_config_set_dreq(&c, spi_get_dreq(dev->config.spi, true));
-  channel_config_set_read_increment(&c, true);
-  channel_config_set_write_increment(&c, false);
 
   // Note: This function manages CS itself (unlike set_window_open)
   // Caller should have set window with set_window_open() before calling
@@ -367,12 +397,31 @@ bool ili9341_send_pixels_dma(ili9341_t *dev, const uint16_t *buffer,
   // Clear any stale interrupt flag before starting
   dma_hw->ints0 = 1u << dev->dma_channel;
 
-  dma_channel_configure(dev->dma_channel, &c,
-                        &spi_get_hw(dev->config.spi)->dr, // dest
-                        buffer,                           // src (bytes)
-                        length * BYTES_PER_PIXEL,         // count (bytes)
-                        true                              // start immediately
-  );
+  if (dev->config.use_16bit_pixel_transfer) {
+    // 16-bit mode: transfer 16-bit words directly
+    spi_set_format(dev->config.spi, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_16);
+    channel_config_set_read_increment(&c, true);
+    channel_config_set_write_increment(&c, false);
+    channel_config_set_dreq(&c, spi_get_dreq(dev->config.spi, true));
+
+    dma_channel_configure(dev->dma_channel, &c,
+                          &spi_get_hw(dev->config.spi)->dr, buffer,
+                          length, // Transfer count in 16-bit words
+                          true);
+  } else {
+    // 8-bit mode: transfer bytes
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+    channel_config_set_read_increment(&c, true);
+    channel_config_set_write_increment(&c, false);
+    channel_config_set_dreq(&c, spi_get_dreq(dev->config.spi, true));
+
+    dma_channel_configure(dev->dma_channel, &c,
+                          &spi_get_hw(dev->config.spi)->dr, buffer,
+                          length * BYTES_PER_PIXEL, // Transfer count in bytes
+                          true);
+  }
 
   // IRQ handler will close CS and clear dma_busy
   return true;
@@ -391,7 +440,8 @@ int ili9341_get_dma_channel(ili9341_t *dev) { return dev->dma_channel; }
  *       Uses DMA for large transfers when available.
  *       Caller should set window before calling (CS will be managed here).
  */
-void ili9341_send_pixels(ili9341_t *dev, const uint16_t *buffer, size_t pixels) {
+void ili9341_send_pixels(ili9341_t *dev, const uint16_t *buffer,
+                         size_t pixels) {
   size_t bytes = pixels * BYTES_PER_PIXEL;
 
   // Use blocking for small transfers (DMA overhead > benefit) or if DMA busy
@@ -401,7 +451,8 @@ void ili9341_send_pixels(ili9341_t *dev, const uint16_t *buffer, size_t pixels) 
 
     if (dev->config.use_16bit_pixel_transfer) {
       // 16-bit mode
-      spi_set_format(dev->config.spi, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+      spi_set_format(dev->config.spi, 16, SPI_CPOL_0, SPI_CPHA_0,
+                     SPI_MSB_FIRST);
       spi_write16_blocking(dev->config.spi, buffer, pixels);
       spi_set_format(dev->config.spi, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     } else {
@@ -631,10 +682,19 @@ void ili9341_draw_pixel(ili9341_t *dev, uint16_t x, uint16_t y,
   if (x >= dev->width || y >= dev->height)
     return;
 
-  uint16_t swapped = __builtin_bswap16(color);
-
   ili9341_set_window_cached(dev, x, y, x, y);
-  spi_write_blocking(dev->config.spi, (uint8_t *)&swapped, 2);
+
+  if (dev->config.use_16bit_pixel_transfer) {
+    // 16-bit mode: no swap needed (SPI MSB_FIRST handles byte order)
+    spi_set_format(dev->config.spi, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+    spi_write16_blocking(dev->config.spi, &color, 1);
+    spi_set_format(dev->config.spi, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+  } else {
+    // 8-bit mode: need byte swap
+    uint16_t swapped = __builtin_bswap16(color);
+    spi_write_blocking(dev->config.spi, (uint8_t *)&swapped, 2);
+  }
+
   ili9341_window_close(dev);
 }
 
