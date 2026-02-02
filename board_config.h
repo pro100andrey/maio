@@ -64,12 +64,20 @@ typedef enum tft_pins_e {
 } tft_pins_t;
 
 #define TFT_SPI_INST spi0
-#define TFT_BAUDRATE (60 * 1000 * 1000)
+#define TFT_BAUDRATE (40 * 1000 * 1000) // 40 MHz - safe for most ILI9341
+#define TFT_USE_16BIT_PIXEL_TRANSFER                                           \
+  false // false=8-bit (compatible), true=16-bit (faster DMA)
 
 /**
  * System configuration
  */
 /** Encoder polling interval (milliseconds) */
 #define ENCODER_POLL_MS 1
+
+/** System tick interval for EV_TIMER_TICK events (milliseconds) */
+#define SYSTEM_TICK_MS 10
+
+/** Event queue size (maximum number of pending events) */
+#define EVENT_QUEUE_SIZE 10
 
 #endif // BOARD_CONFIG_H

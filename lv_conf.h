@@ -1,6 +1,6 @@
 /**
  * @file lv_conf.h
- * Configuration file for v9.5.0-dev
+ * Configuration file for v9.4.0
  */
 
 /*
@@ -69,7 +69,7 @@
 
 #if LV_USE_STDLIB_MALLOC == LV_STDLIB_BUILTIN
     /** Size of memory available for `lv_malloc()` in bytes (>= 2kB) */
-    #define LV_MEM_SIZE (32 * 1024U)          /**< [bytes] */
+    #define LV_MEM_SIZE (64 * 1024U)          /**< [bytes] */
 
     /** Size of the memory expand for `lv_malloc()` in bytes */
     #define LV_MEM_POOL_EXPAND_SIZE 0
@@ -88,7 +88,7 @@
  *====================*/
 
 /** Default display refresh, input device read and animation step period. */
-#define LV_DEF_REFR_PERIOD  10      /**< [ms] - faster for responsive UI */
+#define LV_DEF_REFR_PERIOD  33      /**< [ms] */
 
 /** Default Dots Per Inch. Used to initialize default sizes such as widgets sized, style paddings.
  * (Not so important, you can adjust it to modify default sizes and spaces.) */
@@ -108,13 +108,6 @@
  * - LV_OS_SDL2
  * - LV_OS_CUSTOM */
 #define LV_USE_OS   LV_OS_NONE
-
-/** Use custom tick for Pico SDK */
-#define LV_TICK_CUSTOM 1
-#if LV_TICK_CUSTOM
-    #define LV_TICK_CUSTOM_INCLUDE "pico/time.h"
-    #define LV_TICK_CUSTOM_SYS_TIME_EXPR (to_ms_since_boot(get_absolute_time()))
-#endif
 
 #if LV_USE_OS == LV_OS_CUSTOM
     #define LV_OS_CUSTOM_INCLUDE <stdint.h>
@@ -150,7 +143,7 @@
  * and can't be drawn in chunks. */
 
 /** The target buffer size for simple layer chunks. */
-#define LV_DRAW_LAYER_SIMPLE_BUF_SIZE    (8 * 1024)    /**< [bytes]*/
+#define LV_DRAW_LAYER_SIMPLE_BUF_SIZE    (24 * 1024)    /**< [bytes]*/
 
 /* Limit the max allocated memory for simple and transformed layers.
  * It should be at least `LV_DRAW_LAYER_SIMPLE_BUF_SIZE` sized but if transformed layers are also used
@@ -181,16 +174,16 @@
      * - bitmaps with transparency may use ARGB8888
      */
     #define LV_DRAW_SW_SUPPORT_RGB565       1
-    #define LV_DRAW_SW_SUPPORT_RGB565_SWAPPED       0
-    #define LV_DRAW_SW_SUPPORT_RGB565A8     0
-    #define LV_DRAW_SW_SUPPORT_RGB888       0
-    #define LV_DRAW_SW_SUPPORT_XRGB8888     0
-    #define LV_DRAW_SW_SUPPORT_ARGB8888     0
-    #define LV_DRAW_SW_SUPPORT_ARGB8888_PREMULTIPLIED 0
-    #define LV_DRAW_SW_SUPPORT_L8           0
-    #define LV_DRAW_SW_SUPPORT_AL88         0
-    #define LV_DRAW_SW_SUPPORT_A8           0
-    #define LV_DRAW_SW_SUPPORT_I1           0
+    #define LV_DRAW_SW_SUPPORT_RGB565_SWAPPED       1
+    #define LV_DRAW_SW_SUPPORT_RGB565A8     1
+    #define LV_DRAW_SW_SUPPORT_RGB888       1
+    #define LV_DRAW_SW_SUPPORT_XRGB8888     1
+    #define LV_DRAW_SW_SUPPORT_ARGB8888     1
+    #define LV_DRAW_SW_SUPPORT_ARGB8888_PREMULTIPLIED 1
+    #define LV_DRAW_SW_SUPPORT_L8           1
+    #define LV_DRAW_SW_SUPPORT_AL88         1
+    #define LV_DRAW_SW_SUPPORT_A8           1
+    #define LV_DRAW_SW_SUPPORT_I1           1
 
     /* The threshold of the luminance to consider a pixel as
      * active in indexed color format */
@@ -204,13 +197,13 @@
     /** Use Arm-2D to accelerate software (sw) rendering. */
     #define LV_USE_DRAW_ARM2D_SYNC      0
 
-    /** Enable native helium assembly to be compiled. (DISABLED for Cortex-M33) */
+    /** Enable native helium assembly to be compiled. */
     #define LV_USE_NATIVE_HELIUM_ASM    0
 
     /**
      * - 0: Use a simple renderer capable of drawing only simple rectangles with gradient, images, text, and straight lines only.
      * - 1: Use a complex renderer capable of drawing rounded corners, shadow, skew lines, and arcs too. */
-    #define LV_DRAW_SW_COMPLEX          0
+    #define LV_DRAW_SW_COMPLEX          1
 
     #if LV_DRAW_SW_COMPLEX == 1
         /** Allow buffering some shadow calculation.
@@ -225,7 +218,6 @@
         #define LV_DRAW_SW_CIRCLE_CACHE_SIZE 4
     #endif
 
-    /** Disable ASM optimizations for compatibility */
     #define  LV_USE_DRAW_SW_ASM     LV_DRAW_SW_ASM_NONE
 
     #if LV_USE_DRAW_SW_ASM == LV_DRAW_SW_ASM_CUSTOM
@@ -330,20 +322,11 @@
     /** VG-Lite stroke maximum cache number. */
     #define LV_VG_LITE_STROKE_CACHE_CNT 32
 
-    /** VG-Lite unaligned bitmap font maximum cache number. */
-    #define LV_VG_LITE_BITMAP_FONT_CACHE_CNT 256
-
     /** Remove VLC_OP_CLOSE path instruction (Workaround for NXP) **/
     #define LV_VG_LITE_DISABLE_VLC_OP_CLOSE 0
 
-    /** Disable blit rectangular offset to resolve certain hardware errors. */
-    #define LV_VG_LITE_DISABLE_BLIT_RECT_OFFSET 0
-
     /** Disable linear gradient extension for some older versions of drivers. */
     #define LV_VG_LITE_DISABLE_LINEAR_GRADIENT_EXT 0
-
-    /** Maximum path dump print length (in points) */
-    #define LV_VG_LITE_PATH_DUMP_MAX_LEN 1000
 
     /** Enable usage of the LVGL's built-in vg_lite driver */
     #define LV_USE_VG_LITE_DRIVER  0
@@ -403,8 +386,7 @@
 /** Draw using espressif PPA accelerator */
 #define LV_USE_PPA  0
 #if LV_USE_PPA
-    #define LV_USE_PPA_IMG      0
-    #define LV_PPA_BURST_LENGTH    128
+    #define LV_USE_PPA_IMG 0
 #endif
 
 /* Use EVE FT81X GPU. */
@@ -419,26 +401,6 @@
     #define LV_DRAW_EVE_WRITE_BUFFER_SIZE 2048
 #endif
 
-/** Use NanoVG Renderer
- * - Requires LV_USE_NANOVG, LV_USE_MATRIX.
- */
-#define LV_USE_DRAW_NANOVG 0
-#if LV_USE_DRAW_NANOVG
-    /** Select OpenGL backend for NanoVG:
-     * - LV_NANOVG_BACKEND_GL2:   OpenGL 2.0
-     * - LV_NANOVG_BACKEND_GL3:   OpenGL 3.0+
-     * - LV_NANOVG_BACKEND_GLES2: OpenGL ES 2.0
-     * - LV_NANOVG_BACKEND_GLES3: OpenGL ES 3.0+
-     */
-    #define LV_NANOVG_BACKEND   LV_NANOVG_BACKEND_GLES2
-
-    /** Draw image texture cache count. */
-    #define LV_NANOVG_IMAGE_CACHE_CNT 128
-
-    /** Draw letter texture cache count. */
-    #define LV_NANOVG_LETTER_CACHE_CNT 512
-#endif
-
 /*=======================
  * FEATURE CONFIGURATION
  *=======================*/
@@ -448,7 +410,7 @@
  *-----------*/
 
 /** Enable log module */
-#define LV_USE_LOG 1
+#define LV_USE_LOG 0
 #if LV_USE_LOG
     /** Set value to one of the following levels of logging detail:
      *  - LV_LOG_LEVEL_TRACE    Log detailed information.
@@ -461,7 +423,7 @@
 
     /** - 1: Print log with 'printf';
      *  - 0: User needs to register a callback with `lv_log_register_print_cb()`. */
-    #define LV_LOG_PRINTF 1
+    #define LV_LOG_PRINTF 0
 
     /** Set callback to print logs.
      *  E.g `my_print`. The prototype should be `void my_print(lv_log_level_t level, const char * buf)`.
@@ -470,22 +432,22 @@
 
     /** - 1: Enable printing timestamp;
      *  - 0: Disable printing timestamp. */
-    #define LV_LOG_USE_TIMESTAMP 0
+    #define LV_LOG_USE_TIMESTAMP 1
 
     /** - 1: Print file and line number of the log;
      *  - 0: Do not print file and line number of the log. */
-    #define LV_LOG_USE_FILE_LINE 0
+    #define LV_LOG_USE_FILE_LINE 1
 
     /* Enable/disable LV_LOG_TRACE in modules that produces a huge number of logs. */
-    #define LV_LOG_TRACE_MEM        0   /**< Enable/disable trace logs in memory operations. */
-    #define LV_LOG_TRACE_TIMER      0   /**< Enable/disable trace logs in timer operations. */
-    #define LV_LOG_TRACE_INDEV      0   /**< Enable/disable trace logs in input device operations. */
-    #define LV_LOG_TRACE_DISP_REFR  0   /**< Enable/disable trace logs in display re-draw operations. */
-    #define LV_LOG_TRACE_EVENT      0   /**< Enable/disable trace logs in event dispatch logic. */
-    #define LV_LOG_TRACE_OBJ_CREATE 0   /**< Enable/disable trace logs in object creation (core `obj` creation plus every widget). */
-    #define LV_LOG_TRACE_LAYOUT     0   /**< Enable/disable trace logs in flex- and grid-layout operations. */
-    #define LV_LOG_TRACE_ANIM       0   /**< Enable/disable trace logs in animation logic. */
-    #define LV_LOG_TRACE_CACHE      0   /**< Enable/disable trace logs in cache operations. */
+    #define LV_LOG_TRACE_MEM        1   /**< Enable/disable trace logs in memory operations. */
+    #define LV_LOG_TRACE_TIMER      1   /**< Enable/disable trace logs in timer operations. */
+    #define LV_LOG_TRACE_INDEV      1   /**< Enable/disable trace logs in input device operations. */
+    #define LV_LOG_TRACE_DISP_REFR  1   /**< Enable/disable trace logs in display re-draw operations. */
+    #define LV_LOG_TRACE_EVENT      1   /**< Enable/disable trace logs in event dispatch logic. */
+    #define LV_LOG_TRACE_OBJ_CREATE 1   /**< Enable/disable trace logs in object creation (core `obj` creation plus every widget). */
+    #define LV_LOG_TRACE_LAYOUT     1   /**< Enable/disable trace logs in flex- and grid-layout operations. */
+    #define LV_LOG_TRACE_ANIM       1   /**< Enable/disable trace logs in animation logic. */
+    #define LV_LOG_TRACE_CACHE      1   /**< Enable/disable trace logs in cache operations. */
 #endif  /*LV_USE_LOG*/
 
 /*-------------
@@ -571,13 +533,13 @@
 * - lv_obj_stringify_id:    Return string-ified identifier, e.g. "button3".
 * - lv_obj_free_id:         Does nothing, as there is no memory allocation for the ID.
 * When disabled these functions needs to be implemented by the user.*/
-#define LV_USE_OBJ_ID_BUILTIN   0
+#define LV_USE_OBJ_ID_BUILTIN   1
 
 /** Use obj property set/get API. */
 #define LV_USE_OBJ_PROPERTY 0
 
 /** Enable property name support. */
-#define LV_USE_OBJ_PROPERTY_NAME 0
+#define LV_USE_OBJ_PROPERTY_NAME 1
 
 /* Enable the multi-touch gesture recognition feature */
 /* Gesture recognition requires the use of floats */
@@ -696,7 +658,7 @@
 #define LV_USE_FONT_COMPRESSED 0
 
 /** Enable drawing placeholders when glyph dsc is not found. */
-#define LV_USE_FONT_PLACEHOLDER 0
+#define LV_USE_FONT_PLACEHOLDER 1
 
 /*=================
  *  TEXT SETTINGS
@@ -747,7 +709,7 @@
 /*==================
  * WIDGETS
  *================*/
-/* Documentation for widgets can be found here: https://docs.lvgl.io/master/widgets/index.html . */
+/* Documentation for widgets can be found here: https://docs.lvgl.io/master/details/widgets/index.html . */
 
 /** 1: Causes these widgets to be given default values at creation time.
  *  - lv_buttonmatrix_t:  Get default maps:  {"Btn1", "Btn2", "Btn3", "\n", "Btn4", "Btn5", ""}, else map not set.
@@ -759,19 +721,19 @@
  * */
 #define LV_WIDGETS_HAS_DEFAULT_VALUE  1
 
-#define LV_USE_ANIMIMG    0
+#define LV_USE_ANIMIMG    1
 
-#define LV_USE_ARC        0
+#define LV_USE_ARC        1
 
-#define LV_USE_ARCLABEL  0
+#define LV_USE_ARCLABEL  1
 
-#define LV_USE_BAR        0
+#define LV_USE_BAR        1
 
-#define LV_USE_BUTTON        0
+#define LV_USE_BUTTON        1
 
-#define LV_USE_BUTTONMATRIX  0
+#define LV_USE_BUTTONMATRIX  1
 
-#define LV_USE_CALENDAR   0
+#define LV_USE_CALENDAR   1
 #if LV_USE_CALENDAR
     #define LV_CALENDAR_WEEK_STARTS_MONDAY 0
     #if LV_CALENDAR_WEEK_STARTS_MONDAY
@@ -786,19 +748,19 @@
     #define LV_USE_CALENDAR_CHINESE 0
 #endif  /*LV_USE_CALENDAR*/
 
-#define LV_USE_CANVAS     0
+#define LV_USE_CANVAS     1
 
-#define LV_USE_CHART      0
+#define LV_USE_CHART      1
 
-#define LV_USE_CHECKBOX   0
+#define LV_USE_CHECKBOX   1
 
-#define LV_USE_DROPDOWN   0   /**< Requires: lv_label */
+#define LV_USE_DROPDOWN   1   /**< Requires: lv_label */
 
 #define LV_USE_IMAGE      1   /**< Requires: lv_label */
 
-#define LV_USE_IMAGEBUTTON     0
+#define LV_USE_IMAGEBUTTON     1
 
-#define LV_USE_KEYBOARD   0
+#define LV_USE_KEYBOARD   1
 
 #define LV_USE_LABEL      1
 #if LV_USE_LABEL
@@ -807,61 +769,61 @@
     #define LV_LABEL_WAIT_CHAR_COUNT 3  /**< The count of wait chart */
 #endif
 
-#define LV_USE_LED        0
+#define LV_USE_LED        1
 
-#define LV_USE_LINE       0
+#define LV_USE_LINE       1
 
-#define LV_USE_LIST       0
+#define LV_USE_LIST       1
 
 #define LV_USE_LOTTIE     0  /**< Requires: lv_canvas, thorvg */
 
-#define LV_USE_MENU       0
+#define LV_USE_MENU       1
 
-#define LV_USE_MSGBOX     0
+#define LV_USE_MSGBOX     1
 
-#define LV_USE_ROLLER     0   /**< Requires: lv_label */
+#define LV_USE_ROLLER     1   /**< Requires: lv_label */
 
-#define LV_USE_SCALE      0
+#define LV_USE_SCALE      1
 
-#define LV_USE_SLIDER     0   /**< Requires: lv_bar */
+#define LV_USE_SLIDER     1   /**< Requires: lv_bar */
 
-#define LV_USE_SPAN       0
+#define LV_USE_SPAN       1
 #if LV_USE_SPAN
     /** A line of text can contain this maximum number of span descriptors. */
     #define LV_SPAN_SNIPPET_STACK_SIZE 64
 #endif
 
-#define LV_USE_SPINBOX    0
+#define LV_USE_SPINBOX    1
 
-#define LV_USE_SPINNER    0
+#define LV_USE_SPINNER    1
 
-#define LV_USE_SWITCH     0
+#define LV_USE_SWITCH     1
 
-#define LV_USE_TABLE      0
+#define LV_USE_TABLE      1
 
-#define LV_USE_TABVIEW    0
+#define LV_USE_TABVIEW    1
 
-#define LV_USE_TEXTAREA   0   /**< Requires: lv_label */
+#define LV_USE_TEXTAREA   1   /**< Requires: lv_label */
 #if LV_USE_TEXTAREA != 0
     #define LV_TEXTAREA_DEF_PWD_SHOW_TIME 1500    /**< [ms] */
 #endif
 
-#define LV_USE_TILEVIEW   0
+#define LV_USE_TILEVIEW   1
 
-#define LV_USE_WIN        0
+#define LV_USE_WIN        1
 
 #define LV_USE_3DTEXTURE  0
 
 /*==================
  * THEMES
  *==================*/
-/* Documentation for themes can be found here: https://docs.lvgl.io/master/common-widget-features/styles/styles.html#themes . */
+/* Documentation for themes can be found here: https://docs.lvgl.io/master/details/common-widget-features/styles/styles.html#themes . */
 
 /** A simple, impressive and very complete theme */
-#define LV_USE_THEME_DEFAULT 0
+#define LV_USE_THEME_DEFAULT 1
 #if LV_USE_THEME_DEFAULT
     /** 0: Light mode; 1: Dark mode */
-    #define LV_THEME_DEFAULT_DARK 1
+    #define LV_THEME_DEFAULT_DARK 0
 
     /** 1: Enable grow on press */
     #define LV_THEME_DEFAULT_GROW 1
@@ -871,32 +833,32 @@
 #endif /*LV_USE_THEME_DEFAULT*/
 
 /** A very simple theme that is a good starting point for a custom theme */
-#define LV_USE_THEME_SIMPLE 0
+#define LV_USE_THEME_SIMPLE 1
 
 /** A theme designed for monochrome displays */
-#define LV_USE_THEME_MONO 0
+#define LV_USE_THEME_MONO 1
 
 /*==================
  * LAYOUTS
  *==================*/
-/* Documentation for layouts can be found here: https://docs.lvgl.io/master/common-widget-features/layouts/index.html . */
+/* Documentation for layouts can be found here: https://docs.lvgl.io/master/details/common-widget-features/layouts/index.html . */
 
 /** A layout similar to Flexbox in CSS. */
-#define LV_USE_FLEX 0
+#define LV_USE_FLEX 1
 
 /** A layout similar to Grid in CSS. */
-#define LV_USE_GRID 0
+#define LV_USE_GRID 1
 
 /*====================
  * 3RD PARTS LIBRARIES
  *====================*/
-/* Documentation for libraries can be found here: https://docs.lvgl.io/master/libs/index.html . */
+/* Documentation for libraries can be found here: https://docs.lvgl.io/master/details/libs/index.html . */
 
 /* File system interfaces for common APIs */
 
 /** Setting a default driver letter allows skipping the driver prefix in filepaths.
  *  Documentation about how to use the below driver-identifier letters can be found at
- *  https://docs.lvgl.io/master/main-modules/fs.html#lv-fs-identifier-letters . */
+ *  https://docs.lvgl.io/master/details/main-modules/fs.html#lv-fs-identifier-letters . */
 #define LV_FS_DEFAULT_DRIVER_LETTER '\0'
 
 /** API for fopen, fread, etc. */
@@ -986,9 +948,6 @@
  *  - Supports complete JPEG specifications and high-performance JPEG decoding. */
 #define LV_USE_LIBJPEG_TURBO 0
 
-/** WebP decoder library */
-#define LV_USE_LIBWEBP 0
-
 /** GIF decoder library */
 #define LV_USE_GIF 0
 #if LV_USE_GIF
@@ -1038,9 +997,7 @@
 #define LV_USE_GLTF  0
 
 /** Enable Vector Graphic APIs
- *  Requires `LV_USE_MATRIX = 1`
- *  and a rendering engine supporting vector graphics, e.g.
- *  (LV_USE_DRAW_SW and LV_USE_THORVG) or LV_USE_DRAW_VG_LITE or LV_USE_NEMA_VG. */
+ *  Requires `LV_USE_MATRIX = 1` */
 #define LV_USE_VECTOR_GRAPHIC  0
 
 /** Enable ThorVG (vector graphics library) from the src/libs folder.
@@ -1050,9 +1007,6 @@
 /** Enable ThorVG by assuming that its installed and linked to the project
  *  Requires LV_USE_VECTOR_GRAPHIC */
 #define LV_USE_THORVG_EXTERNAL 0
-
-/** Enable NanoVG (vector graphics library) */
-#define LV_USE_NANOVG 0
 
 /** Use lvgl built-in LZ4 lib */
 #define LV_USE_LZ4_INTERNAL  0
@@ -1081,7 +1035,7 @@
 /*==================
  * OTHERS
  *==================*/
-/* Documentation for several of the below items can be found here: https://docs.lvgl.io/master/auxiliary-modules/index.html . */
+/* Documentation for several of the below items can be found here: https://docs.lvgl.io/master/details/auxiliary-modules/index.html . */
 
 /** 1: Enable API to take snapshot for object */
 #define LV_USE_SNAPSHOT 0
@@ -1192,7 +1146,7 @@
 #define LV_USE_IMGFONT 0
 
 /** 1: Enable an observer pattern implementation */
-#define LV_USE_OBSERVER 0
+#define LV_USE_OBSERVER 1
 
 /** 1: Enable Pinyin input method
  *  - Requires: lv_keyboard */
@@ -1239,13 +1193,10 @@
 /** Enable `lv_test_screenshot_compare`.
  * Requires lodepng and a few MB of extra RAM. */
 #define LV_USE_TEST_SCREENSHOT_COMPARE 0
-
-#if LV_USE_TEST_SCREENSHOT_COMPARE
-    /** 1: Automatically create missing reference images*/
-    #define LV_TEST_SCREENSHOT_CREATE_REFERENCE_IMAGE 1
-#endif /*LV_USE_TEST_SCREENSHOT_COMPARE*/
-
 #endif /*LV_USE_TEST*/
+
+/** Enable loading XML UIs runtime */
+#define LV_USE_XML    0
 
 /** 1: Enable text translation support */
 #define LV_USE_TRANSLATION 0
@@ -1283,7 +1234,11 @@
 /** Use Wayland to open a window and handle input on Linux or BSD desktops */
 #define LV_USE_WAYLAND          0
 #if LV_USE_WAYLAND
-    #define LV_WAYLAND_DIRECT_EXIT          1     /**< 1: Exit the application when all Wayland windows are closed */
+    #define LV_WAYLAND_BUF_COUNT            1    /**< Use 1 for single buffer with partial render mode or 2 for double buffer with full render mode*/
+    #define LV_WAYLAND_USE_DMABUF           0    /**< Use DMA buffers for frame buffers. Requires LV_DRAW_USE_G2D */
+    #define LV_WAYLAND_RENDER_MODE          LV_DISPLAY_RENDER_MODE_PARTIAL   /**< DMABUF supports LV_DISPLAY_RENDER_MODE_FULL and LV_DISPLAY_RENDER_MODE_DIRECT*/
+                                                                             /**< When LV_WAYLAND_USE_DMABUF is disabled, only LV_DISPLAY_RENDER_MODE_PARTIAL is supported*/
+    #define LV_WAYLAND_WINDOW_DECORATIONS   0    /**< Draw client side window decorations only necessary on Mutter/GNOME. Not supported using DMABUF*/
 #endif
 
 /** Driver for /dev/fb */
@@ -1416,9 +1371,7 @@
     #define LV_UEFI_USE_MEMORY_SERVICES 0   /**< Use the memory functions from the boot services table */
 #endif
 
-/** Use a generic OpenGL driver that can be used to embed in other applications or used with GLFW/EGL
- * - Requires LV_USE_MATRIX.
- */
+/** Use a generic OpenGL driver that can be used to embed in other applications or used with GLFW/EGL */
 #define LV_USE_OPENGLES   0
 #if LV_USE_OPENGLES
     #define LV_USE_OPENGLES_DEBUG        1    /**< Enable or disable debug for opengles */
@@ -1434,18 +1387,15 @@
     #define LV_QNX_BUF_COUNT        1    /**< 1 or 2 */
 #endif
 
-/** Enable or disable for external data and destructor function */
-#define LV_USE_EXT_DATA   0
-
 /*=====================
 * BUILD OPTIONS
 *======================*/
 
 /** Enable examples to be built with the library. */
-#define LV_BUILD_EXAMPLES 0
+#define LV_BUILD_EXAMPLES 1
 
 /** Build the demos */
-#define LV_BUILD_DEMOS 0
+#define LV_BUILD_DEMOS 1
 
 /*===================
  * DEMO USAGE
@@ -1498,6 +1448,12 @@
 
     /** Smart-phone like multi-language demo */
     #define LV_USE_DEMO_MULTILANG       0
+
+    /** Widget transformation demo */
+    #define LV_USE_DEMO_TRANSFORM       0
+
+    /** Demonstrate scroll settings */
+    #define LV_USE_DEMO_SCROLL          0
 
     /*E-bike demo with Lottie animations (if LV_USE_LOTTIE is enabled)*/
     #define LV_USE_DEMO_EBIKE           0

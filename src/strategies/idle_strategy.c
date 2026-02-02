@@ -1,74 +1,58 @@
+/**
+ * @file idle_strategy.c
+ * @brief Idle/standby strategy implementation
+ *
+ * Default idle mode - minimal activity, waiting for user input.
+ * Can switch to test mode for display testing or to measurement modes.
+ */
+
 #include "idle_strategy.h"
+#include "../../drivers/display/ili9341.h"
 #include "../managers/display_manager.h"
-#include <lvgl.h>
+#include "test_strategy.h"
+#include <pico/time.h>
 #include <stdio.h>
 
-static int position = 0;
-
-/** LVGL screen for this strategy */
-static lv_obj_t *screen = NULL;
-
-/** LVGL label widget for encoder position */
-static lv_obj_t *label_position = NULL;
-static lv_obj_t *label_title = NULL;
+static int encoder_position = 0;
 
 static void idle_on_enter(void) {
   printf("[Idle] Mode activated\n");
-  position = 0;
+  printf("[Idle] Press button to enter test mode\n");
 
-  // Create LVGL screen
-  screen = lv_obj_create(NULL);
-
-  // Create title label
-  label_title = lv_label_create(screen);
-  lv_label_set_text(label_title, "MAIO - Idle Mode");
-  lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 20);
-  lv_obj_set_style_text_font(label_title, &lv_font_montserrat_14, 0);
-
-  // Create position label
-  label_position = lv_label_create(screen);
-  lv_label_set_text_fmt(label_position, "Position: %d", position);
-  lv_obj_align(label_position, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_text_font(label_position, &lv_font_montserrat_14, 0);
-
-  // Load screen
-  lv_screen_load(screen);
-  printf("[Idle] LVGL screen created and loaded\n");
-}
-
-static void idle_on_exit(void) {
-  printf("[Idle] Mode deactivated\n");
-
-  // Delete LVGL screen and all widgets
-  if (screen) {
-    lv_obj_del(screen);
-    screen = NULL;
-    label_position = NULL;
-    label_title = NULL;
+  // Display simple idle screen
+  ili9341_t *dev = display_manager_get_device();
+  if (dev) {
+    ili9341_fill_screen(dev, 0x0000); // Black background
+    // Draw simple border
+    uint16_t w = ili9341_get_width(dev);
+    uint16_t h = ili9341_get_height(dev);
+    ili9341_draw_line(dev, 0, 0, w - 1, 0, 0xFFFF);
+    ili9341_draw_line(dev, w - 1, 0, w - 1, h - 1, 0xFFFF);
+    ili9341_draw_line(dev, w - 1, h - 1, 0, h - 1, 0xFFFF);
+    ili9341_draw_line(dev, 0, h - 1, 0, 0, 0xFFFF);
   }
+
+  encoder_position = 0;
 }
+
+static void idle_on_exit(void) { printf("[Idle] Mode deactivated\n"); }
 
 static void idle_on_event(const event_t *event) {
   switch (event->type) {
   case EV_ENCODER_ROTATE:
-    position += event->payload;
-    printf("[Idle] Encoder position: %d (delta: %d)\n", position,
-           event->payload);
-
-    // Update LVGL label
-    if (label_position) {
-      lv_label_set_text_fmt(label_position, "Position: %d", position);
-    }
+    encoder_position += event->payload;
+    printf("[Idle] Encoder position: %d\n", encoder_position);
     break;
 
   case EV_ENCODER_BUTTON:
-    printf("[Idle] Button pressed at position: %d\n", position);
-    position = 0; // Reset on button press
-
-    // Update LVGL label
-    if (label_position) {
-      lv_label_set_text_fmt(label_position, "Position: %d", position);
+    if (event->payload == 1) {
+      printf("[Idle] Button pressed - switching to test mode\n");
+      strategy_switch(&test_strategy);
     }
+    break;
+
+  case EV_TIMER_TICK:
+    // No periodic action in idle mode
     break;
 
   default:

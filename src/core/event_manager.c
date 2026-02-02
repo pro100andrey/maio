@@ -1,5 +1,6 @@
 #include "event_manager.h"
 
+#include "board_config.h"
 #include <hardware/sync.h>
 #include <pico/platform.h>
 #include <pico/time.h>

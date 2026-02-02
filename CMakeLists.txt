@@ -34,13 +34,6 @@ project(maio C CXX ASM)
 pico_sdk_init()
 
 # ---- LVGL (submodule) ----
-# Disable Helium before including LVGL
-set(LV_USE_DRAW_SW_ASM_HELIUM OFF CACHE BOOL "" FORCE)
-
-set(LV_CONF_MEM_CUSTOM 1 CACHE INTERNAL "")
-set(CONFIG_LV_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
-set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(CONFIG_LV_USE_THORVG_INTERNAL OFF CACHE BOOL "" FORCE)
 set(LV_CONF_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lv_conf.h" CACHE STRING "" FORCE)
 
 add_subdirectory(lvgl)
@@ -50,20 +43,11 @@ target_include_directories(lvgl PUBLIC ${CMAKE_CURRENT_LIST_DIR})
 
 # ---- Project Configuration ----
 # Edit values below to configure project features
+# Note: Hardware and timing constants are in board_config.h
 
 # Debug & Development Features
 set(DEBUG_VERBOSE OFF)
 set(ENABLE_ASSERTS ON)
-
-# Application Features
-set(ENABLE_WIFI OFF)  # WiFi disabled
-set(ENABLE_ENCODER ON)
-set(ENABLE_LED ON)
-set(ENABLE_DISPLAY ON)  # Display enabled
-
-# Performance Tuning
-set(EVENT_QUEUE_SIZE 10)
-set(SYSTEM_TICK_MS 10)
 
 # Add executable. Default name is the project name, version 0.1
 
@@ -72,6 +56,7 @@ add_executable(maio
     src/core/event_manager.c
     src/core/strategy.c
     src/strategies/idle_strategy.c
+    src/strategies/test_strategy.c
     src/strategies/init_strategy.c
     src/managers/encoder_manager.c
     src/managers/display_manager.c
@@ -91,14 +76,8 @@ pico_enable_stdio_usb(maio 0)
 
 # Apply compile definitions
 target_compile_definitions(maio PRIVATE
-    EVENT_QUEUE_SIZE=${EVENT_QUEUE_SIZE}
-    SYSTEM_TICK_MS=${SYSTEM_TICK_MS}
     $<$<BOOL:${DEBUG_VERBOSE}>:DEBUG_VERBOSE>
     $<$<BOOL:${ENABLE_ASSERTS}>:ENABLE_ASSERTS>
-    $<$<BOOL:${ENABLE_WIFI}>:ENABLE_WIFI>
-    $<$<BOOL:${ENABLE_ENCODER}>:ENABLE_ENCODER>
-    $<$<BOOL:${ENABLE_LED}>:ENABLE_LED>
-    $<$<BOOL:${ENABLE_DISPLAY}>:ENABLE_DISPLAY>
     LV_CONF_INCLUDE_SIMPLE
 )
 

@@ -8,6 +8,7 @@
 #include "../../drivers/display/ili9341.h"
 #include "../core/event_manager.h"
 #include "../managers/display_manager.h"
+#include "../managers/encoder_manager.h"
 #include "idle_strategy.h"
 #include <stdio.h>
 
@@ -18,7 +19,11 @@ static ili9341_t ili_device;
 static bool init_started = false;
 
 static void init_on_enter(void) {
-  printf("[Init] Starting display initialization...\n");
+  printf("[Init] Starting hardware initialization...\n");
+
+  // Initialize encoder (starts internal 1ms polling timer)
+  encoder_manager_init(PIN_ENC_A, PIN_ENC_B, PIN_ENC_SW);
+  printf("[Init] Encoder initialized\n");
 
   // Configure ILI9341
   ili9341_config_t config = {
@@ -30,6 +35,7 @@ static void init_on_enter(void) {
       .pin_led = PIN_TFT_LED,
       .pin_sck = PIN_TFT_SCK,
       .pin_mosi = PIN_TFT_MOSI,
+      .use_16bit_pixel_transfer = TFT_USE_16BIT_PIXEL_TRANSFER,
   };
 
   // Initialize driver (non-blocking)
@@ -51,20 +57,18 @@ static void init_on_event(const event_t *event) {
 
     // Continue async init
     if (ili9341_init_tick(&ili_device)) {
-      // Hardware ready!
-      printf("[Init] Hardware initialized, setting up LVGL...\n");
+      printf("[Init] Hardware initialized\n");
 
-      // Initialize LVGL
+      // Store device reference in manager
       display_manager_init(&ili_device);
 
       // Turn on backlight
       ili9341_set_backlight(&ili_device, 255);
+      printf("[Init] Backlight ON\n");
 
-      // Post ready event
-      event_t ev = {.type = EV_DISPLAY_READY, .payload = 0};
-      event_manager_post(&ev);
+      // Set default orientation to landscape
+      ili9341_set_orientation(&ili_device, ILI9341_LANDSCAPE);
 
-      // Switch to idle strategy
       printf("[Init] Switching to Idle mode...\n");
       strategy_switch(&idle_strategy);
     }
