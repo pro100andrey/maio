@@ -56,6 +56,7 @@ add_executable(maio
     src/core/event_manager.c
     src/core/strategy.c
     src/strategies/idle_strategy.c
+    src/strategies/test_strategy.c
     src/strategies/init_strategy.c
     src/managers/encoder_manager.c
     src/managers/display_manager.c
