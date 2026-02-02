@@ -464,10 +464,9 @@ static scene_fn_t scenes[] = {
 
 /** Scene names for logging */
 static const char *scene_names[] = {
-    "Sync fill",     "Async fill",  "Quadrants",     "Stripes async",
-    "Orientation",   "Backlight",   "SPI mode",      "Window cache",
-    "DMA threshold", "Mixed ops",   "Benchmark",     "Pixel buffer",
-    "Power mgmt"};
+    "Sync fill", "Async fill",   "Quadrants",    "Stripes async", "Orientation",
+    "Backlight", "SPI mode",     "Window cache", "DMA threshold", "Mixed ops",
+    "Benchmark", "Pixel buffer", "Power mgmt"};
 
 /**
  * @brief Execute currently selected scene

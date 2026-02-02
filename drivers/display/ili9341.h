@@ -296,9 +296,10 @@ void ili9341_display_on(ili9341_t *dev);
 /**
  * @brief Enable/disable idle mode (reduced color depth for power saving)
  * @param dev Device context
- * @param enable true to enable idle mode (8-color), false for normal (65K-color)
- * @note Idle mode reduces color depth to save power while keeping display active.
- *       Useful for low-power applications where full color is not needed.
+ * @param enable true to enable idle mode (8-color), false for normal
+ * (65K-color)
+ * @note Idle mode reduces color depth to save power while keeping display
+ * active. Useful for low-power applications where full color is not needed.
  */
 void ili9341_set_idle_mode(ili9341_t *dev, bool enable);
 

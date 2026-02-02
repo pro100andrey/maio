@@ -764,7 +764,8 @@ void ili9341_sleep(ili9341_t *dev) {
     uint32_t slice = pwm_gpio_to_slice_num(dev->config.pin_led);
     pwm_set_chan_level(slice, pwm_gpio_to_channel(dev->config.pin_led), 0);
   }
-  printf("[ILI9341] Sleep mode enabled (backlight saved: %u)\n", dev->backlight_level);
+  printf("[ILI9341] Sleep mode enabled (backlight saved: %u)\n",
+         dev->backlight_level);
 }
 
 void ili9341_wakeup(ili9341_t *dev) {
@@ -773,9 +774,11 @@ void ili9341_wakeup(ili9341_t *dev) {
   // Restore saved backlight level
   if (dev->config.pin_led != 255 && dev->backlight_level > 0) {
     uint32_t slice = pwm_gpio_to_slice_num(dev->config.pin_led);
-    pwm_set_chan_level(slice, pwm_gpio_to_channel(dev->config.pin_led), dev->backlight_level);
+    pwm_set_chan_level(slice, pwm_gpio_to_channel(dev->config.pin_led),
+                       dev->backlight_level);
   }
-  printf("[ILI9341] Wakeup complete (backlight restored: %u)\n", dev->backlight_level);
+  printf("[ILI9341] Wakeup complete (backlight restored: %u)\n",
+         dev->backlight_level);
 }
 
 void ili9341_display_off(ili9341_t *dev) {
@@ -794,9 +797,11 @@ void ili9341_display_on(ili9341_t *dev) {
   // Restore saved backlight level
   if (dev->config.pin_led != 255 && dev->backlight_level > 0) {
     uint32_t slice = pwm_gpio_to_slice_num(dev->config.pin_led);
-    pwm_set_chan_level(slice, pwm_gpio_to_channel(dev->config.pin_led), dev->backlight_level);
+    pwm_set_chan_level(slice, pwm_gpio_to_channel(dev->config.pin_led),
+                       dev->backlight_level);
   }
-  printf("[ILI9341] Display ON (backlight restored: %u)\n", dev->backlight_level);
+  printf("[ILI9341] Display ON (backlight restored: %u)\n",
+         dev->backlight_level);
 }
 
 void ili9341_set_idle_mode(ili9341_t *dev, bool enable) {
