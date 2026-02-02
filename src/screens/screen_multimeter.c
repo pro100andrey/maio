@@ -1,10 +1,11 @@
 #include "screen_multimeter.h"
+#include "../shared/digital_display.h"
 #include <stdio.h>
 #include <stdlib.h>
 
 // Multimeter screen components
 static lv_obj_t *screen = NULL;
-static lv_obj_t *label_voltage = NULL;
+static digital_display_t *voltage_display = NULL;
 static lv_obj_t *label_menu_item1 = NULL;
 static lv_obj_t *label_menu_item2 = NULL;
 static lv_obj_t *label_menu_item3 = NULL;
@@ -34,13 +35,12 @@ static float generate_random_voltage(void) {
  * @brief Update timer callback (33ms = 30 times per second)
  */
 static void update_timer_cb(lv_timer_t *timer) {
-  if (!label_voltage)
+  if (!voltage_display)
     return;
 
-  float voltage = generate_random_voltage();
-  char buf[32];
-  snprintf(buf, sizeof(buf), "%.6f V", voltage);
-  lv_label_set_text(label_voltage, buf);
+  // Only update last 2 digits (00-99)
+  int last_two_digits = rand() % 100;
+  digital_display_set_value(voltage_display, last_two_digits);
 
   update_counter++;
 }
@@ -91,13 +91,18 @@ lv_obj_t *screen_multimeter_create(void) {
   lv_label_set_text(label_menu_item3, menu_items[2]);
   lv_obj_set_pos(label_menu_item3, 0, 10 + menu_spacing * 2);
 
-  // Large voltage display in center
-  label_voltage = lv_label_create(screen);
-  lv_label_set_text(label_voltage, "1.000000 V");
-  lv_obj_set_style_text_font(label_voltage, &lv_font_unscii_16, 0);
-  lv_obj_set_style_text_color(label_voltage, lv_color_hex(0x00FF00),
-                              0); // Green
-  lv_obj_align(label_voltage, LV_ALIGN_CENTER, 0, 0);
+  // Create digital display for voltage: "1.0000" + "xx" + " V"
+  // digit_count=2 for last two digits, prefix="1.0000", suffix=" V",
+  // spacing=20px
+  voltage_display = digital_display_create(screen,
+                                           2,        // 2 digits (00-99)
+                                           "1.0000", // prefix
+                                           " V",     // suffix
+                                           20, // spacing between characters
+                                           &lv_font_montserrat_32, // font
+                                           lv_color_hex(0x00FF00) // green color
+  );
+  digital_display_align(voltage_display, LV_ALIGN_CENTER, 0, 0);
 
   // Bottom menu items (Exit)
   label_menu_exit = lv_label_create(screen);

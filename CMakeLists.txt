@@ -68,6 +68,7 @@ add_executable(maio
     src/screens/screen_4.c
     src/screens/screen_multimeter.c
     src/screens/screen_settings.c
+    src/shared/digital_display.c
     drivers/encoder/encoder.c
     drivers/display/ili9341.c
 )
