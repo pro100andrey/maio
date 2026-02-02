@@ -613,10 +613,13 @@ bool ili9341_fill_rect_async(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
 
   if (x >= dev->width || y >= dev->height)
     return false;
+
   if (x + w > dev->width)
     w = dev->width - x;
+
   if (y + h > dev->height)
     h = dev->height - y;
+
   if (!w || !h)
     return false;
 
@@ -732,10 +735,12 @@ void ili9341_draw_line(ili9341_t *dev, uint16_t x0, uint16_t y0, uint16_t x1,
       break;
 
     int e2 = err * 2;
+
     if (e2 >= -dy) {
       err -= dy;
       x0 += sx;
     }
+
     if (e2 <= dx) {
       err += dx;
       y0 += sy;
