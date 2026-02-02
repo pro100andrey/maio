@@ -82,10 +82,12 @@ static void write_cmd_data(ili9341_t *dev, uint8_t cmd, const uint8_t *data,
 }
 
 /**
- * @brief Set address window (optimized - batched commands)
+ * @brief Set address window and leave CS LOW for pixel data transfer
+ * @note CS stays LOW, DC set to DATA mode. Call ili9341_window_close() after
+ * pixel transfer.
  */
-static void ili9341_set_window(ili9341_t *dev, uint16_t x0, uint16_t y0,
-                               uint16_t x1, uint16_t y1) {
+static void ili9341_set_window_open(ili9341_t *dev, uint16_t x0, uint16_t y0,
+                                    uint16_t x1, uint16_t y1) {
   CS_LOW();
   sleep_us(2);
 
@@ -109,7 +111,13 @@ static void ili9341_set_window(ili9341_t *dev, uint16_t x0, uint16_t y0,
 
   DC_DATA();
   sleep_us(1);
+  // CS stays LOW for continuous pixel transfer
 }
+
+/**
+ * @brief Close window transaction (raise CS)
+ */
+static inline void ili9341_window_close(ili9341_t *dev) { CS_HIGH(); }
 
 // DMA IRQ handler for automatic completion signaling
 static ili9341_t *g_dma_device = NULL;
@@ -121,20 +129,21 @@ static void __isr ili9341_dma_irq_handler(void) {
 
   if (dma_hw->ints0 & (1u << ch)) {
     dma_hw->ints0 = 1u << ch;
-    
+
     // Wait for SPI to finish shifting remaining bytes
     while (spi_is_busy(g_dma_device->config.spi)) {
       tight_loop_contents();
     }
-    
+
     // End transaction
     gpio_put(g_dma_device->config.pin_cs, 1);
-    
+
     // Restore 8-bit mode if we were in 16-bit pixel transfer mode
     if (g_dma_device->config.use_16bit_pixel_transfer) {
-      spi_set_format(g_dma_device->config.spi, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+      spi_set_format(g_dma_device->config.spi, 8, SPI_CPOL_0, SPI_CPHA_0,
+                     SPI_MSB_FIRST);
     }
-    
+
     g_dma_device->dma_busy = false;
   }
 }
@@ -311,6 +320,8 @@ bool ili9341_send_pixels_dma(ili9341_t *dev, const uint16_t *buffer,
   channel_config_set_read_increment(&c, true);
   channel_config_set_write_increment(&c, false);
 
+  // Note: This function manages CS itself (unlike set_window_open)
+  // Caller should have set window with set_window_open() before calling
   CS_LOW();
   DC_DATA();
 
@@ -324,7 +335,7 @@ bool ili9341_send_pixels_dma(ili9341_t *dev, const uint16_t *buffer,
                         true                              // start immediately
   );
 
-  // IRQ handler will clear dma_busy
+  // IRQ handler will close CS and clear dma_busy
   return true;
 }
 
@@ -412,7 +423,7 @@ void ili9341_fill_rect(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
 
   uint32_t pixels = (uint32_t)w * h;
 
-  ili9341_set_window(dev, x, y, x + w - 1, y + h - 1);
+  ili9341_set_window_open(dev, x, y, x + w - 1, y + h - 1);
 
 #define FAST_CHUNK 512
   static uint16_t buf[FAST_CHUNK];
@@ -422,7 +433,7 @@ void ili9341_fill_rect(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
     // 16-bit mode: no swap needed (SPI MSB_FIRST handles byte order)
     for (int i = 0; i < FAST_CHUNK; i++)
       buf[i] = color;
-      
+
     spi_set_format(dev->config.spi, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     while (pixels) {
       uint32_t chunk = pixels > FAST_CHUNK ? FAST_CHUNK : pixels;
@@ -435,7 +446,7 @@ void ili9341_fill_rect(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
     uint16_t swapped = __builtin_bswap16(color);
     for (int i = 0; i < FAST_CHUNK; i++)
       buf[i] = swapped;
-      
+
     while (pixels) {
       uint32_t chunk = pixels > FAST_CHUNK ? FAST_CHUNK : pixels;
       spi_write_blocking(dev->config.spi, (uint8_t *)buf, chunk * 2);
@@ -443,7 +454,7 @@ void ili9341_fill_rect(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
     }
   }
 
-  CS_HIGH();
+  ili9341_window_close(dev);
 }
 
 void ili9341_fill_screen(ili9341_t *dev, uint16_t color) {
@@ -483,30 +494,30 @@ bool ili9341_fill_rect_async(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
 
   uint32_t pixels = (uint32_t)w * h;
 
-  ili9341_set_window(dev, x, y, x + w - 1, y + h - 1);
+  ili9341_set_window_open(dev, x, y, x + w - 1, y + h - 1);
 
   dev->dma_busy = true;
 
   dma_channel_config c = dma_channel_get_default_config(dev->dma_channel);
-  
+
   if (dev->config.use_16bit_pixel_transfer) {
-    // 16-bit mode: repeat single 16-bit value (no swap - SPI MSB_FIRST handles it)
+    // 16-bit mode: repeat single 16-bit value (no swap - SPI MSB_FIRST handles
+    // it)
     static uint16_t color_16;
     color_16 = color;
-    
+
     spi_set_format(dev->config.spi, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-    
+
     channel_config_set_transfer_data_size(&c, DMA_SIZE_16);
-    channel_config_set_read_increment(&c, false);  // Repeat mode
+    channel_config_set_read_increment(&c, false); // Repeat mode
     channel_config_set_write_increment(&c, false);
     channel_config_set_dreq(&c, spi_get_dreq(dev->config.spi, true));
 
     dma_hw->ints0 = 1u << dev->dma_channel;
 
     dma_channel_configure(dev->dma_channel, &c,
-                          &spi_get_hw(dev->config.spi)->dr,
-                          &color_16,
-                          pixels,  // Transfer count in 16-bit words
+                          &spi_get_hw(dev->config.spi)->dr, &color_16,
+                          pixels, // Transfer count in 16-bit words
                           true);
   } else {
     // 8-bit mode: ring buffer over 2 bytes
@@ -514,19 +525,18 @@ bool ili9341_fill_rect_async(ili9341_t *dev, uint16_t x, uint16_t y, uint16_t w,
     uint16_t swapped = __builtin_bswap16(color);
     color_bytes[0] = (uint8_t)(swapped & 0xFF);
     color_bytes[1] = (uint8_t)(swapped >> 8);
-    
+
     channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
     channel_config_set_read_increment(&c, true);
     channel_config_set_write_increment(&c, false);
-    channel_config_set_ring(&c, false, 1);  // Ring on read, size=2^1=2 bytes
+    channel_config_set_ring(&c, false, 1); // Ring on read, size=2^1=2 bytes
     channel_config_set_dreq(&c, spi_get_dreq(dev->config.spi, true));
 
     dma_hw->ints0 = 1u << dev->dma_channel;
 
     dma_channel_configure(dev->dma_channel, &c,
-                          &spi_get_hw(dev->config.spi)->dr,
-                          color_bytes,
-                          pixels * 2,  // Transfer count in bytes
+                          &spi_get_hw(dev->config.spi)->dr, color_bytes,
+                          pixels * 2, // Transfer count in bytes
                           true);
   }
 
@@ -550,9 +560,9 @@ void ili9341_draw_pixel(ili9341_t *dev, uint16_t x, uint16_t y,
 
   uint16_t swapped = __builtin_bswap16(color);
 
-  ili9341_set_window(dev, x, y, x, y);
+  ili9341_set_window_open(dev, x, y, x, y);
   spi_write_blocking(dev->config.spi, (uint8_t *)&swapped, 2);
-  CS_HIGH();
+  ili9341_window_close(dev);
 }
 
 void ili9341_draw_line(ili9341_t *dev, uint16_t x0, uint16_t y0, uint16_t x1,
