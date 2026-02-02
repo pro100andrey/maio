@@ -79,10 +79,6 @@ typedef struct {
   uint32_t state_timer;   // For non-blocking delays
   int dma_channel;        // DMA channel for pixel transfer (-1 if not claimed)
   volatile bool dma_busy; // DMA transfer in progress
-  // DMA transfer bookkeeping
-  const uint8_t *dma_src;            // Source buffer for current DMA (bytes)
-  volatile uint32_t dma_remaining;   // Bytes left to send after current chunk
-  bool dma_src_inc;                  // Whether to increment source pointer
   ili9341_orientation_t orientation; // Current display orientation
   uint16_t width;                    // Current width based on orientation
   uint16_t height;                   // Current height based on orientation
