@@ -8,6 +8,7 @@
 #include "../../drivers/display/ili9341.h"
 #include "../core/event_manager.h"
 #include "../managers/display_manager.h"
+#include "../managers/encoder_manager.h"
 #include "idle_strategy.h"
 #include <stdio.h>
 
@@ -18,7 +19,11 @@ static ili9341_t ili_device;
 static bool init_started = false;
 
 static void init_on_enter(void) {
-  printf("[Init] Starting display initialization...\n");
+  printf("[Init] Starting hardware initialization...\n");
+
+  // Initialize encoder (starts internal 1ms polling timer)
+  encoder_manager_init(PIN_ENC_A, PIN_ENC_B, PIN_ENC_SW);
+  printf("[Init] Encoder initialized\n");
 
   // Configure ILI9341
   ili9341_config_t config = {

@@ -72,4 +72,10 @@ typedef enum tft_pins_e {
 /** Encoder polling interval (milliseconds) */
 #define ENCODER_POLL_MS 1
 
+/** System tick interval for EV_TIMER_TICK events (milliseconds) */
+#define SYSTEM_TICK_MS 10
+
+/** Event queue size (maximum number of pending events) */
+#define EVENT_QUEUE_SIZE 10
+
 #endif // BOARD_CONFIG_H
