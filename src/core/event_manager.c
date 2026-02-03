@@ -1,6 +1,7 @@
 #include "event_manager.h"
 
 #include "board_config.h"
+#include <assert.h>
 #include <hardware/sync.h>
 #include <pico/platform.h>
 #include <pico/time.h>
@@ -19,7 +20,10 @@ bool event_manager_post(const event_t *event) {
     return false;
   }
 
-  return queue_try_add(&event_queue, event);
+  bool result = queue_try_add(&event_queue, event);
+
+  assert(result && "Event queue overflow: event dropped");
+  return result;
 }
 
 void event_manager_wait(event_t *event) {

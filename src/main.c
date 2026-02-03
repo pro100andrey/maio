@@ -3,17 +3,16 @@
 #include "core/strategy.h"
 #include "shared/events.h"
 #include "strategies/init_strategy.h"
+#include <assert.h>
 #include <lvgl/lvgl.h>
 #include <pico/stdio.h>
 #include <pico/time.h>
 #include <stdio.h>
 
-/**
- * @brief System tick timer callback
- *
- * Generates periodic EV_TIMER_TICK events for application logic.
- * Encoder polling is handled by encoder_manager's internal timer.
- */
+// System tick timer callback
+//
+// Generates periodic EV_TIMER_TICK events for application logic.
+// Encoder polling is handled by encoder_manager's internal timer.
 static bool timer_callback(struct repeating_timer *t) {
   (void)t;
 
@@ -31,7 +30,7 @@ int main(void) {
   // Initialize stdio for printf
   stdio_init_all();
 
-  // Initialize e5vent system
+  // Initialize event system
   event_manager_init();
 
   // Set initial strategy to init (will handle all hardware initialization)
@@ -44,7 +43,7 @@ int main(void) {
   event_t event;
   while (true) {
     // Wait for event (uses __wfi() for power efficiency)
-    if (event_manager_wait_timeout(&event, 100)) {
+    if (event_manager_wait_timeout(&event, EVENT_MANAGER_WAIT_MS)) {
       // Dispatch event to current strategy
       strategy_dispatch_event(&event);
     }
