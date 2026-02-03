@@ -33,7 +33,7 @@ void event_manager_wait(event_t *event) {
 
   // This blocks and puts CPU in WFI (Wait For Interrupt) state
   queue_remove_blocking(&event_queue, event);
-}
+} 
 
 bool event_manager_wait_timeout(event_t *event, uint32_t timeout_ms) {
   if (!event) {
@@ -44,11 +44,11 @@ bool event_manager_wait_timeout(event_t *event, uint32_t timeout_ms) {
   absolute_time_t timeout = make_timeout_time_ms(timeout_ms);
 
   while (!time_reached(timeout)) {
+    // Get queue data and copy to event
     if (queue_try_remove(&event_queue, event)) {
       return true;
     }
-    // Use WFI to sleep until interrupt (use builtin to avoid declaration
-    // issues)
+    // Wait for interrupt to save power
     __asm__ volatile("wfi");
   }
 
