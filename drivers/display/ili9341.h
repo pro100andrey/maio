@@ -36,6 +36,16 @@ typedef enum {
 /** Color format */
 #define ILI9341_COLOR_DEPTH 16 // RGB565
 
+// Forward declaration for callback typedef
+typedef struct ili9341_t ili9341_t;
+
+/**
+ * @brief Callback type for DMA completion notification
+ * @param dev Device context
+ * @param user_data User-provided data pointer
+ */
+typedef void (*ili9341_dma_complete_cb_t)(ili9341_t *dev, void *user_data);
+
 /**
  * @brief ILI9341 initialization states (for async init)
  */
@@ -76,7 +86,7 @@ typedef struct {
 /**
  * @brief ILI9341 device context
  */
-typedef struct {
+struct ili9341_t {
   ili9341_config_t config;
   ili9341_init_state_t init_state;
   uint32_t state_timer;   // For non-blocking delays
@@ -86,7 +96,11 @@ typedef struct {
   uint16_t width;                    // Current width based on orientation
   uint16_t height;                   // Current height based on orientation
   uint8_t backlight_level;           // Saved backlight level for display_on/off
-} ili9341_t;
+
+  // DMA completion callback
+  ili9341_dma_complete_cb_t dma_complete_cb;
+  void *dma_cb_user_data;
+};
 
 /**
  * @brief Initialize device context (does not touch hardware)
@@ -94,6 +108,17 @@ typedef struct {
  * @param config Hardware configuration
  */
 void ili9341_init(ili9341_t *dev, const ili9341_config_t *config);
+
+/**
+ * @brief Register callback for DMA completion notification
+ * @param dev Device context
+ * @param callback Callback function to call when DMA completes (NULL to
+ * unregister)
+ * @param user_data User data pointer to pass to callback
+ */
+void ili9341_set_dma_complete_callback(ili9341_t *dev,
+                                       ili9341_dma_complete_cb_t callback,
+                                       void *user_data);
 
 /**
  * @brief Async initialization tick (call from event loop)

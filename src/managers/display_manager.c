@@ -20,6 +20,16 @@ static lv_color_t draw_buf_1[DRAW_BUF_SIZE];
 static lv_color_t draw_buf_2[DRAW_BUF_SIZE];
 
 /**
+ * @brief DMA completion callback - called from interrupt context
+ */
+static void dma_complete_callback(ili9341_t *dev, void *user_data) {
+  lv_display_t *disp = (lv_display_t *)user_data;
+
+  // Notify LVGL that flush is complete
+  lv_display_flush_ready(disp);
+}
+
+/**
  * @brief LVGL flush callback - sends framebuffer to display
  */
 static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area,
@@ -40,20 +50,8 @@ static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area,
   // Send pixels (DMA will be used automatically if buffer > 2KB)
   ili9341_send_pixels(dev, (const uint16_t *)px_map, w * h);
 
-  // Wait for DMA to complete with timeout
-  uint32_t timeout_start = to_ms_since_boot(get_absolute_time());
-  while (!ili9341_dma_is_idle(dev)) {
-    tight_loop_contents();
-
-    // Timeout after 100ms to prevent infinite loop
-    if (to_ms_since_boot(get_absolute_time()) - timeout_start > 100) {
-      printf("[DisplayMgr] DMA timeout!\n");
-      break;
-    }
-  }
-
-  // Tell LVGL we're done
-  lv_display_flush_ready(disp);
+  // Note: lv_display_flush_ready() will be called from DMA interrupt callback
+  // No need to wait here - CPU is free during DMA transfer!
 }
 
 void display_manager_init(ili9341_t *ili9341_dev) {
@@ -85,6 +83,9 @@ void display_manager_init_lvgl(void) {
 
   // Set flush callback
   lv_display_set_flush_cb(lv_disp, lvgl_flush_cb);
+
+  // Register DMA completion callback
+  ili9341_set_dma_complete_callback(ili_dev, dma_complete_callback, lv_disp);
 
   printf("[DisplayMgr] LVGL initialized: %dx%d, buffers: %d bytes\n",
          ili9341_get_width(ili_dev), ili9341_get_height(ili_dev),

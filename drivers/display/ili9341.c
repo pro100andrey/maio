@@ -159,6 +159,12 @@ static void __isr ili9341_dma_irq_handler(void) {
     }
 
     g_dma_device->dma_busy = false;
+
+    // Call completion callback if registered
+    if (g_dma_device->dma_complete_cb) {
+      g_dma_device->dma_complete_cb(g_dma_device,
+                                    g_dma_device->dma_cb_user_data);
+    }
   }
 }
 
@@ -168,6 +174,8 @@ void ili9341_init(ili9341_t *dev, const ili9341_config_t *config) {
   dev->init_state = ILI9341_STATE_IDLE;
   dev->dma_channel = -1;
   dev->dma_busy = false;
+  dev->dma_complete_cb = NULL;
+  dev->dma_cb_user_data = NULL;
 
   // Set default orientation (portrait)
   dev->orientation = ILI9341_PORTRAIT;
@@ -239,6 +247,13 @@ void ili9341_init(ili9341_t *dev, const ili9341_config_t *config) {
 
   printf("[ILI9341] Initialized: SPI=%s, DMA=%d (IRQ enabled)\n",
          dev->config.spi == spi0 ? "spi0" : "spi1", dev->dma_channel);
+}
+
+void ili9341_set_dma_complete_callback(ili9341_t *dev,
+                                       ili9341_dma_complete_cb_t callback,
+                                       void *user_data) {
+  dev->dma_complete_cb = callback;
+  dev->dma_cb_user_data = user_data;
 }
 
 bool ili9341_init_tick(ili9341_t *dev) {
