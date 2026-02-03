@@ -4,6 +4,7 @@
  */
 
 #include "display_manager.h"
+#include <pico/time.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -39,9 +40,16 @@ static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area,
   // Send pixels (DMA will be used automatically if buffer > 2KB)
   ili9341_send_pixels(dev, (const uint16_t *)px_map, w * h);
 
-  // Wait for DMA to complete
+  // Wait for DMA to complete with timeout
+  uint32_t timeout_start = to_ms_since_boot(get_absolute_time());
   while (!ili9341_dma_is_idle(dev)) {
     tight_loop_contents();
+
+    // Timeout after 100ms to prevent infinite loop
+    if (to_ms_since_boot(get_absolute_time()) - timeout_start > 100) {
+      printf("[DisplayMgr] DMA timeout!\n");
+      break;
+    }
   }
 
   // Tell LVGL we're done

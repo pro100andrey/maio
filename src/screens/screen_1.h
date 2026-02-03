@@ -14,4 +14,14 @@
  */
 lv_obj_t *screen_1_create(void);
 
+/**
+ * @brief Called when screen becomes active
+ */
+void screen_1_on_show(void);
+
+/**
+ * @brief Called when screen is about to be hidden
+ */
+void screen_1_on_hide(void);
+
 #endif // SCREEN_1_H

@@ -99,6 +99,7 @@ target_link_libraries(maio
         hardware_spi
         hardware_dma
         hardware_pwm
+        hardware_adc
         lvgl
 )
 

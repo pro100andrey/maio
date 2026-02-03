@@ -33,6 +33,9 @@ void screen_manager_init(void) {
   lv_screen_load(screens[SCREEN_1]);
   current_screen = SCREEN_1;
 
+  // Activate first screen
+  screen_1_on_show();
+
   printf("[ScreenMgr] Initialized with %d screens\n", SCREEN_COUNT);
 }
 
@@ -52,6 +55,9 @@ void screen_manager_show(screen_id_t screen_id) {
 
   // Exit callback for previous screen
   switch (current_screen) {
+  case SCREEN_1:
+    screen_1_on_hide();
+    break;
   case SCREEN_2:
     screen_2_on_hide();
     break;
@@ -64,6 +70,9 @@ void screen_manager_show(screen_id_t screen_id) {
 
   // Update screen content before showing
   switch (screen_id) {
+  case SCREEN_1:
+    screen_1_on_show();
+    break;
   case SCREEN_2:
     screen_2_on_show();
     break;
