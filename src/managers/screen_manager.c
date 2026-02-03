@@ -8,8 +8,10 @@
 #include "../screens/screen_2.h"
 #include "../screens/screen_3.h"
 #include "../screens/screen_4.h"
+#include "../screens/screen_about.h"
 #include "../screens/screen_multimeter.h"
 #include "../screens/screen_settings.h"
+#include "../screens/screen_theme.h"
 #include <stdio.h>
 
 /** Array of all screens */
@@ -28,6 +30,8 @@ void screen_manager_init(void) {
   screens[SCREEN_4] = screen_4_create();
   screens[SCREEN_MULTIMETER] = screen_multimeter_create();
   screens[SCREEN_SETTINGS] = screen_settings_create();
+  screens[SCREEN_THEME] = screen_theme_create();
+  screens[SCREEN_ABOUT] = screen_about_create();
 
   // Show first screen
   lv_screen_load(screens[SCREEN_1]);
@@ -64,6 +68,12 @@ void screen_manager_show(screen_id_t screen_id) {
   case SCREEN_MULTIMETER:
     screen_multimeter_on_exit();
     break;
+  case SCREEN_SETTINGS:
+    screen_settings_on_hide();
+    break;
+  case SCREEN_THEME:
+    screen_theme_on_hide();
+    break;
   default:
     break;
   }
@@ -80,7 +90,11 @@ void screen_manager_show(screen_id_t screen_id) {
     screen_multimeter_on_enter();
     break;
   case SCREEN_SETTINGS:
+    screen_settings_on_show();
     screen_settings_update();
+    break;
+  case SCREEN_THEME:
+    screen_theme_on_show();
     break;
   default:
     break;
@@ -125,8 +139,43 @@ void screen_manager_encoder_rotate(int direction) {
   case SCREEN_MULTIMETER:
     screen_multimeter_encoder_rotate(direction);
     break;
+  case SCREEN_SETTINGS:
+    screen_settings_encoder_rotate(direction);
+    break;
+  case SCREEN_THEME:
+    screen_theme_encoder_rotate(direction);
+    break;
   default:
     // Other screens don't use encoder rotation
     break;
   }
+}
+
+void screen_manager_recreate_screens(void) {
+  printf("[ScreenMgr] Recreating screens with new theme...\n");
+
+  screen_id_t saved_screen = current_screen;
+
+  // Delete all screens
+  for (int i = 0; i < SCREEN_COUNT; i++) {
+    if (screens[i]) {
+      lv_obj_del(screens[i]);
+      screens[i] = NULL;
+    }
+  }
+
+  // Recreate all screens
+  screens[SCREEN_1] = screen_1_create();
+  screens[SCREEN_2] = screen_2_create();
+  screens[SCREEN_3] = screen_3_create();
+  screens[SCREEN_4] = screen_4_create();
+  screens[SCREEN_MULTIMETER] = screen_multimeter_create();
+  screens[SCREEN_SETTINGS] = screen_settings_create();
+  screens[SCREEN_THEME] = screen_theme_create();
+  screens[SCREEN_ABOUT] = screen_about_create();
+
+  // Return to Settings screen after theme change
+  screen_manager_show(SCREEN_SETTINGS);
+
+  printf("[ScreenMgr] Screens recreated\n");
 }

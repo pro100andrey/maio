@@ -4,6 +4,7 @@
  */
 
 #include "screen_1.h"
+#include "../managers/theme_manager.h"
 #include "../shared/digital_display.h"
 #include <hardware/adc.h>
 #include <stdio.h>
@@ -37,34 +38,34 @@ static void update_timer_cb(lv_timer_t *timer) {
 
 lv_obj_t *screen_1_create(void) {
   lv_obj_t *screen = lv_obj_create(NULL);
+  const theme_colors_t *colors = theme_manager_get_colors();
 
   // Set background color
-  lv_obj_set_style_bg_color(screen, lv_color_hex(0x1E1E1E), 0);
+  lv_obj_set_style_bg_color(screen, colors->bg_primary, 0);
 
   // Create title label
   lv_obj_t *title = lv_label_create(screen);
   lv_label_set_text(title, "Voltmeter");
-  lv_obj_set_style_text_color(title, lv_color_hex(0x00FF00), 0);
+  lv_obj_set_style_text_color(title, colors->accent_green, 0);
   lv_obj_set_style_text_font(title, &lv_font_montserrat_28, 0);
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 20);
 
   // Create digital display for voltage (format: X.xxx V)
-  lv_color_t green = lv_color_hex(0x00FF00);
-  voltage_display = digital_display_create(screen, 3, "0.", " V", 18,
-                                           &lv_font_montserrat_40, green);
+  voltage_display = digital_display_create(
+      screen, 3, "0.", " V", 18, &lv_font_montserrat_40, colors->accent_green);
   digital_display_align(voltage_display, LV_ALIGN_CENTER, 0, -10);
 
   // Create detailed voltage label
   label_voltage = lv_label_create(screen);
   lv_label_set_text(label_voltage, "ADC: 0.0000 V");
-  lv_obj_set_style_text_color(label_voltage, lv_color_hex(0xFFFFFF), 0);
+  lv_obj_set_style_text_color(label_voltage, colors->text_primary, 0);
   lv_obj_set_style_text_font(label_voltage, &lv_font_montserrat_14, 0);
   lv_obj_align(label_voltage, LV_ALIGN_CENTER, 0, 60);
 
   // Create info label
   lv_obj_t *info = lv_label_create(screen);
   lv_label_set_text(info, "GPIO26 (ADC0)");
-  lv_obj_set_style_text_color(info, lv_color_hex(0xAAAAAA), 0);
+  lv_obj_set_style_text_color(info, colors->text_secondary, 0);
   lv_obj_set_style_text_font(info, &lv_font_montserrat_14, 0);
   lv_obj_align(info, LV_ALIGN_BOTTOM_MID, 0, -20);
 

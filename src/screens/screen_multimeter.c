@@ -1,4 +1,5 @@
 #include "screen_multimeter.h"
+#include "../managers/theme_manager.h"
 #include "../shared/digital_display.h"
 #include <stdlib.h>
 
@@ -48,17 +49,18 @@ static void update_timer_cb(lv_timer_t *timer) {
  * @brief Update menu item colors based on selection
  */
 static void update_menu_selection(void) {
+  const theme_colors_t *colors = theme_manager_get_colors();
   lv_obj_t *menu_labels[] = {label_menu_item1, label_menu_item2,
                              label_menu_item3, label_menu_exit};
 
   for (uint8_t i = 0; i < MENU_ITEM_COUNT; i++) {
     if (menu_labels[i]) {
       if (i == selected_menu_item) {
-        lv_obj_set_style_text_color(menu_labels[i], lv_color_hex(0xFFFF00),
+        lv_obj_set_style_text_color(menu_labels[i], colors->accent_yellow,
                                     0); // Yellow
         lv_obj_set_style_text_font(menu_labels[i], &lv_font_montserrat_14, 0);
       } else {
-        lv_obj_set_style_text_color(menu_labels[i], lv_color_hex(0xAAAAAA),
+        lv_obj_set_style_text_color(menu_labels[i], colors->text_secondary,
                                     0); // Gray
         lv_obj_set_style_text_font(menu_labels[i], &lv_font_montserrat_14, 0);
       }
@@ -67,10 +69,10 @@ static void update_menu_selection(void) {
 }
 
 lv_obj_t *screen_multimeter_create(void) {
+  const theme_colors_t *colors = theme_manager_get_colors();
   // Create screen
   screen = lv_obj_create(NULL);
-  lv_obj_set_style_bg_color(screen, lv_color_hex(0x000000),
-                            0); // Black background
+  lv_obj_set_style_bg_color(screen, colors->bg_primary, 0);
 
   int16_t menu_spacing = 20;
 
@@ -99,14 +101,14 @@ lv_obj_t *screen_multimeter_create(void) {
                                            " V",     // suffix
                                            20, // spacing between characters
                                            &lv_font_montserrat_32, // font
-                                           lv_color_hex(0x00FF00) // green color
+                                           colors->accent_green // green color
   );
   digital_display_align(voltage_display, LV_ALIGN_CENTER, 0, 0);
 
   // Bottom menu items (Exit)
   label_menu_exit = lv_label_create(screen);
   lv_label_set_text(label_menu_exit, menu_items[3]);
-  lv_obj_set_style_text_color(label_menu_exit, lv_color_hex(0xFF0000),
+  lv_obj_set_style_text_color(label_menu_exit, colors->accent_red,
                               0); // Red
   lv_obj_set_pos(label_menu_exit, 0, 240 - 30);
 

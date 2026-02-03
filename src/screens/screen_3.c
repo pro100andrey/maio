@@ -4,6 +4,7 @@
  */
 
 #include "screen_3.h"
+#include "../managers/theme_manager.h"
 
 lv_obj_t *screen_3_create(void) {
   lv_obj_t *screen = lv_obj_create(NULL);

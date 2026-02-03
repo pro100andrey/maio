@@ -19,7 +19,9 @@ typedef enum {
   SCREEN_4 = 3,
   SCREEN_MULTIMETER = 4,
   SCREEN_SETTINGS = 5,
-  SCREEN_COUNT = 6
+  SCREEN_THEME = 6,
+  SCREEN_ABOUT = 7,
+  SCREEN_COUNT = 8
 } screen_id_t;
 
 /**
@@ -60,5 +62,10 @@ void screen_manager_update(void);
  * counter-clockwise)
  */
 void screen_manager_encoder_rotate(int direction);
+
+/**
+ * @brief Recreate all screens (used when theme changes)
+ */
+void screen_manager_recreate_screens(void);
 
 #endif // SCREEN_MANAGER_H

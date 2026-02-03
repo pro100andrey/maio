@@ -6,12 +6,14 @@
 #include "screen_4.h"
 #include "../../drivers/display/ili9341.h"
 #include "../managers/display_manager.h"
+#include "../managers/theme_manager.h"
 
 lv_obj_t *screen_4_create(void) {
   lv_obj_t *screen = lv_obj_create(NULL);
+  const theme_colors_t *colors = theme_manager_get_colors();
 
-  // Set background color to black
-  lv_obj_set_style_bg_color(screen, lv_color_hex(0x000000), 0);
+  // Set background color
+  lv_obj_set_style_bg_color(screen, colors->bg_primary, 0);
 
   // Get display dimensions
   ili9341_t *dev = display_manager_get_device();

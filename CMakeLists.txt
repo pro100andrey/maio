@@ -62,12 +62,15 @@ add_executable(maio
     src/managers/encoder_manager.c
     src/managers/display_manager.c
     src/managers/screen_manager.c
+    src/managers/theme_manager.c
     src/screens/screen_1.c
     src/screens/screen_2.c
     src/screens/screen_3.c
     src/screens/screen_4.c
     src/screens/screen_multimeter.c
     src/screens/screen_settings.c
+    src/screens/screen_theme.c
+    src/screens/screen_about.c
     src/shared/digital_display.c
     drivers/encoder/encoder.c
     drivers/display/ili9341.c
