@@ -40,3 +40,41 @@ Thumbs.db
 
 # Generated files
 generated/
+
+# KiCad Project Git Cleanup
+
+# --- Temporary and backup files ---
+*.bak
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*~
+_autosave-*
+*.tmp
+
+# --- Local machine-specific files ---
+# These contain local paths and window settings that shouldn't be shared
+fp-info-cache
+*.lck
+
+# --- Report and Log files ---
+# Generated during ERC (rules check) or netlist export
+*.rpt
+*.log
+
+# --- Manufacturing output (Optional) ---
+# It is better to generate these from source than to track them
+[Pp]lots/
+[Gg]erber/
+[Oo]utput/
+[Aa]rtwork/
+
+# --- Legacy backup files ---
+*.old
+*.bck
+
+# --- 3D Viewer cache ---
+.cache/
+
+# KiCad specific project backups
+
+maio-backups/

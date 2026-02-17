@@ -35,6 +35,8 @@ pico_sdk_init()
 
 # ---- LVGL (submodule) ----
 set(LV_CONF_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lv_conf.h" CACHE STRING "" FORCE)
+add_definitions(-DLV_BUILD_DEMOS=0)
+add_definitions(-DLV_BUILD_EXAMPLES=0)
 
 add_subdirectory(lvgl)
 
@@ -56,7 +58,6 @@ add_executable(maio
     src/core/event_manager.c
     src/core/strategy.c
     src/strategies/idle_strategy.c
-    src/strategies/test_strategy.c
     src/strategies/init_strategy.c
     src/strategies/ui_strategy.c
     src/managers/encoder_manager.c
@@ -65,13 +66,6 @@ add_executable(maio
     src/managers/theme_manager.c
     src/screens/screen_1.c
     src/screens/screen_2.c
-    src/screens/screen_3.c
-    src/screens/screen_4.c
-    src/screens/screen_multimeter.c
-    src/screens/screen_settings.c
-    src/screens/screen_theme.c
-    src/screens/screen_about.c
-    src/shared/digital_display.c
     drivers/encoder/encoder.c
     drivers/display/ili9341.c
 )

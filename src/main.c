@@ -28,6 +28,7 @@ static bool timer_callback(struct repeating_timer *t) {
 
 int main(void) {
   // Initialize stdio for printf
+
   stdio_init_all();
 
   // Initialize event system

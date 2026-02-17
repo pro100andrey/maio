@@ -6,7 +6,6 @@
 #include "ui_strategy.h"
 #include "../managers/screen_manager.h"
 #include "../managers/theme_manager.h"
-#include "../screens/screen_settings.h"
 #include "../shared/events.h"
 #include "idle_strategy.h"
 #include <lvgl/lvgl.h>
@@ -60,34 +59,13 @@ static void ui_on_event(const event_t *event) {
           to_ms_since_boot(get_absolute_time()) - button_press_time;
 
       if (press_duration > 3000) {
-        // Long press (>3 seconds) - exit multimeter/theme/about or return to
-        // idle
-        screen_id_t current = screen_manager_get_current();
-        if (current == SCREEN_MULTIMETER || current == SCREEN_THEME ||
-            current == SCREEN_ABOUT) {
-          printf("[UI] Long press - returning to screen 1\n");
-          screen_manager_show(SCREEN_1);
-        } else {
-          printf("[UI] Long press - returning to idle\n");
-          strategy_switch(&idle_strategy);
-        }
+        // Long press (>3 seconds) - return to idle
+        printf("[UI] Long press - returning to idle\n");
+        strategy_switch(&idle_strategy);
       } else {
-        // Short press
-        screen_id_t current = screen_manager_get_current();
-
-        if (current == SCREEN_SETTINGS) {
-          // Settings: short press selects menu item
-          printf("[UI] Short press on settings - selecting item\n");
-          screen_settings_select();
-        } else if (current == SCREEN_THEME || current == SCREEN_ABOUT) {
-          // Theme/About: short press returns to Settings
-          printf("[UI] Short press - returning to settings\n");
-          screen_manager_show(SCREEN_SETTINGS);
-        } else {
-          // Other screens: switch to next screen
-          printf("[UI] Short press - next screen\n");
-          screen_manager_next();
-        }
+        // Short press - switch to next screen
+        printf("[UI] Short press - next screen\n");
+        screen_manager_next();
       }
       button_press_time = 0;
     }

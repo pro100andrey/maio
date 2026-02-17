@@ -9,8 +9,8 @@
 #include "idle_strategy.h"
 #include "../../drivers/display/ili9341.h"
 #include "../managers/display_manager.h"
-#include "test_strategy.h"
 #include <pico/time.h>
+#include <src/strategies/ui_strategy.h>
 #include <stdio.h>
 
 static int encoder_position = 0;
@@ -45,7 +45,7 @@ static void idle_on_event(const event_t *event) {
   case EV_ENCODER_BUTTON:
     if (event->payload == 1) {
       printf("[Idle] Button pressed - switching to test mode\n");
-      strategy_switch(&test_strategy);
+      strategy_switch(&ui_strategy);
     }
     break;
 

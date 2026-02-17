@@ -12,17 +12,7 @@
 /**
  * @brief Screen IDs for navigation
  */
-typedef enum {
-  SCREEN_1 = 0,
-  SCREEN_2 = 1,
-  SCREEN_3 = 2,
-  SCREEN_4 = 3,
-  SCREEN_MULTIMETER = 4,
-  SCREEN_SETTINGS = 5,
-  SCREEN_THEME = 6,
-  SCREEN_ABOUT = 7,
-  SCREEN_COUNT = 8
-} screen_id_t;
+typedef enum { SCREEN_1 = 0, SCREEN_2 = 1, SCREEN_COUNT = 2 } screen_id_t;
 
 /**
  * @brief Initialize screen manager and create all screens
